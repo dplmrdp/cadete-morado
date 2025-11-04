@@ -54,20 +54,33 @@ async function loadFederado() {
     executablePath: "/usr/bin/chromium-browser",
     args: ["--no-sandbox", "--disable-setuid-sandbox"]
   });
+
   const page = await browser.newPage();
   await page.goto(FED_URL, { waitUntil: "networkidle0" });
 
-  const state = await page.evaluate(() => window.__APOLLO_STATE__);
+  // ⬅️ Nueva extracción de estado
+  const nextData = await page.evaluate(() => window.__NEXT_DATA__);
   await browser.close();
 
-  if (!state) throw new Error("No se pudo leer __APOLLO_STATE__");
+  if (!nextData || !nextData.props || !nextData.props.pageProps) {
+    throw new Error("No se pudo leer __NEXT_DATA__");
+  }
+
+  // Localizamos lista de partidos dentro del árbol
+  const matches = nextData.props.pageProps?.dehydratedState?.queries
+    ?.map(q => q.state?.data)
+    ?.flat()
+    ?.filter(x => x && typeof x === "object")
+    ?.flatMap(obj => obj.matches || [])
+    ?.filter(Boolean) || [];
+
+  if (!matches.length) {
+    throw new Error("No se encontraron partidos en __NEXT_DATA__");
+  }
 
   const events = [];
-  for (const key in state) {
-    if (!key.startsWith("Match:")) continue;
-    const m = state[key];
-    if (!m || !m.homeTeam || !m.awayTeam) continue;
 
+  for (const m of matches) {
     const home = normalize(m.homeTeam.name);
     const away = normalize(m.awayTeam.name);
     if (![home, away].includes(normalize(TEAM_NAME_FED))) continue;
@@ -83,9 +96,10 @@ async function loadFederado() {
     } else {
       const base = new Date(m.date ?? new Date());
       const start = new Date(base);
-      start.setDate(start.getDate() - ((start.getDay() + 1) % 7));
+      start.setDate(start.getDate() - ((start.getDay() + 1) % 7)); // viernes
       const end = new Date(start);
-      end.setDate(end.getDate() + 2);
+      end.setDate(end.getDate() + 2); // domingo
+
       events.push({
         type: "weekend",
         start,
@@ -98,6 +112,7 @@ async function loadFederado() {
 
   return events;
 }
+
 
 // -------- TODO: loadIMD stays exactly as already implemented --------
 // (no lo toco porque ya funcionaba y no da errores)
