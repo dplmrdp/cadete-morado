@@ -1,12 +1,5 @@
 // scripts/update_calendars_imd_selenium.js
-//
-// Adaptado para la tabla de búsqueda de equipos del IMD:
-// 1. Buscar "las flores"
-// 2. Recorrer la tabla de equipos
-// 3. Elegir la fila donde Categoría contenga "cadete femenino" y el nombre del equipo contenga "morado"
-// 4. Clic en "Seleccionar equipo"
-// 5. En el desplegable de jornada, seleccionar "Todas"
-// 6. Extraer todos los partidos (con hora o fin de semana completo)
+// Versión adaptada: el cuadro de búsqueda autocompleta muestra los equipos directamente
 
 const fs = require("fs");
 const { Builder, By, until, Key } = require("selenium-webdriver");
@@ -86,7 +79,7 @@ END:VEVENT
 }
 
 async function loadIMD() {
-  console.log("Cargando calendario IMD (tabla de equipos)...");
+  console.log("Cargando calendario IMD (autocompletado de equipos)...");
   const options = new chrome.Options()
     .addArguments("--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage");
   const driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
@@ -94,43 +87,38 @@ async function loadIMD() {
   try {
     await driver.get(IMD_URL);
 
-    // Buscar "las flores"
+    // 1️⃣ Buscar “las flores”
     const search = await driver.wait(until.elementLocated(By.id("busqueda")), 10000);
-    await search.sendKeys("las flores", Key.ENTER);
-    const btn = await driver.findElement(By.css("button"));
-    await btn.click();
+    await search.clear();
+    await search.sendKeys("las flores");
+    await driver.sleep(2000);
 
-    // Esperar la tabla de resultados
-    await driver.wait(until.elementLocated(By.css("table")), 15000);
+    // 2️⃣ Esperar cuadro de resultados (sugerencias)
+    const suggestions = await driver.wait(
+      until.elementsLocated(By.css(".ui-menu-item, .autocomplete-suggestion, li, div.suggestion")),
+      10000
+    );
 
-    // Buscar filas del equipo correcto
-    const rows = await driver.findElements(By.css("table tbody tr"));
-    let foundButton = null;
-
-    for (const row of rows) {
-      const text = normalize(await row.getText());
+    let found = null;
+    for (const sug of suggestions) {
+      const text = normalize(await sug.getText());
       if (text.includes("flores") && text.includes(TEAM_KEY) && text.includes(CAT_KEY)) {
-        try {
-          foundButton = await row.findElement(By.css("button, input[type='button'], a"));
-          break;
-        } catch {
-          continue;
-        }
+        found = sug;
+        break;
       }
     }
 
-    if (!foundButton) {
-      console.warn("⚠️ No se encontró el equipo Cadete Femenino Morado en la tabla.");
+    if (!found) {
+      console.warn("⚠️ No se encontró el equipo Cadete Femenino Morado en las sugerencias.");
       await driver.quit();
       return [];
     }
 
-    await foundButton.click();
+    await found.click();
+    await driver.sleep(3000);
 
-    // Esperar al selector de jornada y elegir “Todas”
+    // 3️⃣ Seleccionar “Todas” en el desplegable de jornadas
     const sel = await driver.wait(until.elementLocated(By.id("seljor")), 15000);
-    await driver.wait(until.elementIsVisible(sel), 10000);
-    await driver.sleep(1000);
     await driver.executeScript(`
       const s = document.querySelector('#seljor');
       if (s) {
@@ -144,6 +132,7 @@ async function loadIMD() {
     `);
     await driver.sleep(2000);
 
+    // 4️⃣ Extraer las jornadas y partidos
     const html = await driver.getPageSource();
     const sections = html.split(/<h2[^>]*>[^<]*Jornada/).slice(1);
     const events = [];
