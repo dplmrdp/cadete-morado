@@ -23,15 +23,12 @@ jobs:
         with:
           node-version: 18
 
-      - name: Clean environment
+      - name: Clean environment completely
         run: |
-          rm -rf node_modules package-lock.json
-          npm cache clean --force
+          rm -rf node_modules package-lock.json package.json
+          echo "✅ Entorno limpio: sin dependencias previas"
 
-      - name: Install dependencies
-        run: npm install cheerio
-
-      - name: Run update script
+      - name: Run update script directly
         run: node scripts/update_calendars.js
 
       - name: Commit and push calendar updates
