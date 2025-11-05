@@ -1,6 +1,16 @@
 const fs = require("fs");
-const fetch = require("node-fetch");
 const cheerio = require("cheerio");
+const https = require("https");
+
+const fetch = (url) =>
+  new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => resolve({ text: () => Promise.resolve(data) }));
+    }).on("error", reject);
+  });
+
 
 const TEAM_NAME_FED = "C.D. LAS FLORES SEVILLA MORADO";
 const FED_URL = "https://favoley.es/es/tournament/1321417/calendar/3652130/all";
