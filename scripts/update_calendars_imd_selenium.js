@@ -71,48 +71,49 @@ END:VEVENT
 }
 
 async function loadIMD() {
-  console.log("Cargando calendario IMD (tabla de equipos)…");
+console.log("Cargando calendario IMD (tabla de equipos)…");
 
-  const options = new chrome.Options()
-    .addArguments("--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage");
-  const driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
+try {
+  // Esperar a que aparezca la tabla de resultados de equipos
+  await driver.wait(until.elementLocated(By.css("table.tt")), 10000);
 
-  try {
-    await driver.get("https://imd.sevilla.org/app/jjddmm_resultados/");
+  const table = await driver.findElement(By.css("table.tt"));
+  const rows = await table.findElements(By.css("tbody tr"));
+  console.log(`🔍 Se han encontrado ${rows.length} filas en la tabla.`);
 
-    const search = await driver.wait(until.elementLocated(By.id("busqueda")), 15000);
-    await search.clear();
-    await search.sendKeys("flores");
+  let clicked = false;
 
-    await driver.wait(until.elementLocated(By.css("table")), 15000);
-    await driver.wait(until.elementsLocated(By.css("table tbody tr")), 15000);
+  for (const row of rows) {
+    const cells = await row.findElements(By.css("td.cc"));
+    if (cells.length < 3) continue;
 
-     // Buscar filas de la tabla principal de equipos (class="tt")
-    const rows = await driver.findElements(By.css("table.tt tbody tr"));
-    let clicked = false;
+    const teamName = norm(await cells[0].getText());
+    const category = norm(await cells[2].getText());
+    console.log(`• Fila detectada: [${teamName}] | [${category}]`);
 
-    console.log(`🔍 Se han encontrado ${rows.length} filas en la tabla.`);
-
-    for (const row of rows) {
-      const cells = await row.findElements(By.css("td.cc"));
-      if (cells.length < 3) continue;
-
-      const teamName = norm(await cells[0].getText());
-      const category = norm(await cells[2].getText());
-
-      // Mostrar información de depuración
-      console.log(`• Fila detectada: [${teamName}] | [${category}]`);
-
-      if (teamName.includes("flores") && teamName.includes("morado") &&
-          category.includes("cadete") && category.includes("femenino")) {
-
-        console.log(`✅ Fila encontrada: ${teamName} (${category})`);
-        const link = await cells[0].findElement(By.css("a[onclick^='datosequipo(']"));
-        await driver.executeScript("arguments[0].click();", link);
-        clicked = true;
-        break;
-      }
+    if (
+      teamName.includes("flores") &&
+      teamName.includes("morado") &&
+      category.includes("cadete") &&
+      category.includes("femenino")
+    ) {
+      console.log(`✅ Fila encontrada: ${teamName} (${category})`);
+      const link = await cells[0].findElement(By.css("a[onclick^='datosequipo(']"));
+      await driver.executeScript("arguments[0].click();", link);
+      clicked = true;
+      break;
     }
+  }
+
+  if (!clicked) {
+    console.warn("⚠️ No se encontró la fila 'CD LAS FLORES SEVILLA MORADO' (Cadete Femenino).");
+    return [];
+  }
+} catch (err) {
+  console.error("❌ Error al cargar la tabla IMD:", err.message);
+  return [];
+}
+
 
     if (!clicked) {
       console.warn("⚠️ No se encontró la fila 'CD LAS FLORES SEVILLA MORADO' (Cadete Femenino).");
