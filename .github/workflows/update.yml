@@ -2,7 +2,7 @@ name: Update calendars daily
 
 on:
   schedule:
-    - cron: '0 6 * * *' # Todos los días a las 6:00 UTC
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -27,12 +27,7 @@ jobs:
         run: |
           rm -rf node_modules package-lock.json package.json
           npm cache clean --force
-          echo "✅ Entorno limpio: sin dependencias previas"
-
-      - name: Install Cheerio
-        run: |
-          npm init -y
-          npm install cheerio
+          echo "✅ Entorno limpio"
 
       - name: Run update script
         run: node scripts/update_calendars.js
