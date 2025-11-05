@@ -91,25 +91,30 @@ async function loadIMD() {
     await driver.wait(until.elementsLocated(By.css("table tbody tr")), 15000);
 
     const rows = await driver.findElements(By.css("table tbody tr"));
-    let clicked = false;
+        let clicked = false;
 
     for (const row of rows) {
-      const tds = await row.findElements(By.css("td"));
-      if (tds.length < 3) continue;
+      const htmlRow = await row.getAttribute("outerHTML");
 
-      const equipoTxt = norm(await tds[0].getText());
-      const categoriaTxt = norm(await tds[2].getText());
+      // Extrae texto limpio de cada columna sin confiar en el orden estricto
+      const cells = [...htmlRow.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(td =>
+        td[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().toLowerCase()
+      );
 
-      const esMorado = equipoTxt.includes("flores") && equipoTxt.includes("morado");
-      const esCadeteFem = categoriaTxt.includes("cadete femenino");
+      const fullText = cells.join(" | ");
+      const esFlores = fullText.includes("flores");
+      const esMorado = fullText.includes("morado");
+      const esCadete = fullText.includes("cadete") && fullText.includes("femenino");
 
-      if (esMorado && esCadeteFem) {
-        const link = await tds[0].findElement(By.css("a[onclick^='datosequipo(']"));
+      if (esFlores && esMorado && esCadete) {
+        console.log(`→ Fila encontrada: ${fullText}`);
+        const link = await row.findElement(By.css("a[onclick^='datosequipo(']"));
         await driver.executeScript("arguments[0].click();", link);
         clicked = true;
         break;
       }
     }
+
 
     if (!clicked) {
       console.warn("⚠️ No se encontró la fila 'CD LAS FLORES SEVILLA MORADO' (Cadete Femenino).");
