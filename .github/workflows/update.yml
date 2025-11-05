@@ -29,8 +29,11 @@ jobs:
           npm cache clean --force
           echo "✅ Entorno limpio"
 
-      - name: Run update script
-        run: node scripts/update_calendars.js
+      - name: Run update scripts
+        run: |
+          node scripts/update_calendars.js
+          node scripts/update_calendars_imd.js
+
 
       - name: Commit and push calendar updates
         run: |
