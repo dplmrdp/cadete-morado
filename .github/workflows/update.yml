@@ -13,16 +13,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      - name: Setup Google Chrome
-        uses: browser-actions/setup-chrome@v1
-
-      - name: Setup Chromedriver
-        uses: nanasess/setup-chromedriver@v2
-
-      - name: Install Selenium WebDriver
-        run: npm install selenium-webdriver
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -39,13 +29,24 @@ jobs:
           npm cache clean --force
           echo "✅ Entorno limpio"
 
-      - name: Run update script
+      # 🟢 Instalar Chrome y Chromedriver
+      - name: Setup Google Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Setup Chromedriver
+        uses: nanasess/setup-chromedriver@v2
+
+      # 🟢 Instalar Selenium
+      - name: Install Selenium WebDriver
+        run: npm install selenium-webdriver
+
+      # 🟢 Ejecutar los scripts (Federado + IMD Selenium)
+      - name: Run update scripts
         run: |
           node scripts/update_calendars.js
           node scripts/update_calendars_imd_selenium.js
 
-
-
+      # 🟢 Subir los .ics actualizados
       - name: Commit and push calendar updates
         run: |
           git config user.email "github-actions@github.com"
