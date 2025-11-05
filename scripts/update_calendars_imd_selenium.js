@@ -90,22 +90,21 @@ async function loadIMD() {
     const rows = await driver.findElements(By.css("table tbody tr"));
     let clicked = false;
 
+    const rows = await driver.findElements(By.css("table.tt tbody tr"));
+    let clicked = false;
+
     for (const row of rows) {
-      const links = await row.findElements(By.css("a"));
-      const texts = [];
-      for (const link of links) {
-        const t = await link.getText();
-        texts.push(norm(t));
-      }
-      const rowText = texts.join(" | ");
+      const cells = await row.findElements(By.css("td.cc"));
+      if (cells.length < 3) continue;
 
-      const esFlores = rowText.includes("flores");
-      const esMorado = rowText.includes("morado");
-      const esCadete = rowText.includes("cadete") && rowText.includes("femenino");
+      const teamName = norm(await cells[0].getText());
+      const category = norm(await cells[2].getText());
 
-      if (esFlores && esMorado && esCadete) {
-        console.log(`→ Fila encontrada: ${rowText}`);
-        const link = await row.findElement(By.css("a[onclick^='datosequipo(']"));
+      if (teamName.includes("flores") && teamName.includes("morado") &&
+          category.includes("cadete") && category.includes("femenino")) {
+
+        console.log(`→ Fila encontrada: ${teamName} (${category})`);
+        const link = await cells[0].findElement(By.css("a[onclick^='datosequipo(']"));
         await driver.executeScript("arguments[0].click();", link);
         clicked = true;
         break;
@@ -116,6 +115,7 @@ async function loadIMD() {
       console.warn("⚠️ No se encontró la fila 'CD LAS FLORES SEVILLA MORADO' (Cadete Femenino).");
       return [];
     }
+
 
     const sel = await driver.wait(until.elementLocated(By.id("seljor")), 15000);
     await driver.executeScript(`
