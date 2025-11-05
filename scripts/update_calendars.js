@@ -1,94 +1,99 @@
-// scripts/update_calendars.js
 const cheerio = require("cheerio");
 const fs = require("fs");
-const fetch = require("node-fetch");
+const fetch = global.fetch || require("undici").fetch;
 
-const URL = "https://favoley.es/es/tournament/1321417/calendar/3652130";
+async function loadFederado() {
+  const url = "https://favoley.es/es/tournament/1321417/calendar/3652130/all";
+  console.log(`Descargando calendario de ${url}...`);
 
-// Descargar HTML del calendario
-async function fetchCalendar() {
-  console.log("Descargando calendario...");
-  const res = await fetch(URL);
+  const res = await fetch(url);
   const html = await res.text();
-  return html;
-}
-
-// Convertir "Sáb, 18/10/2025 10:00 GMT+1 ..." → objeto Date
-function parseDateTime(text) {
-  const regex = /(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/;
-  const match = text.match(regex);
-  if (!match) return null;
-  const [, d, M, Y, h, m] = match;
-  return new Date(`${Y}-${M}-${d}T${h}:${m}:00+01:00`);
-}
-
-async function main() {
-  const html = await fetchCalendar();
   const $ = cheerio.load(html);
+
   const partidos = [];
 
-  $(".box-info.full.bottom-borderless").each((_, box) => {
-    // --- Extraer rango de fechas de la jornada ---
-    const jornadaTitulo = $(box).find("h2").text().trim();
+  // Extraer las fechas de jornada del encabezado de cada bloque
+  $(".box-info.full.bottom-borderless").each((_, jornada) => {
+    const jornadaTitle = $(jornada).find("h2").text().trim();
+    const matchJornada = jornadaTitle.match(/\((\d{2}\/\d{2}\/\d{2}).*?(\d{2}\/\d{2}\/\d{2})\)/);
     let jornadaInicio = null;
-    const matchFechas = jornadaTitulo.match(
-      /\((\d{2})\/(\d{2})\/(\d{2})\s*–\s*(\d{2})\/(\d{2})\/(\d{2})\)/
-    );
-    if (matchFechas) {
-      const [, d1, m1, y1] = matchFechas;
-      jornadaInicio = new Date(`20${y1}-${m1}-${d1}T00:00:00+01:00`);
+    let jornadaFin = null;
+
+    if (matchJornada) {
+      // Parsear fechas dd/mm/yy → yyyy-mm-dd
+      const [_, ini, fin] = matchJornada;
+      const toISO = d => {
+        const [dd, mm, yy] = d.split("/");
+        return `20${yy}-${mm}-${dd}`;
+      };
+      jornadaInicio = toISO(ini);
+      jornadaFin = toISO(fin);
     }
 
-    // --- Recorrer las filas de la tabla ---
-    $(box)
-      .find("tbody tr")
-      .each((_, tr) => {
-        const equipos = $(tr)
-          .find(".colstyle-equipo .ellipsis")
-          .map((_, e) => $(e).attr("title").trim())
-          .get();
+    // Recorrer cada fila de la jornada
+    $(jornada).find("tbody tr").each((_, tr) => {
+      const equipos = [];
+      $(tr)
+        .find(".colstyle-equipo span.ellipsis")
+        .each((_, e) => equipos.push($(e).text().trim()));
 
-        if (equipos.length < 2) return;
+      if (equipos.length === 0) return;
 
-        const fechaTexto = $(tr).find(".colstyle-fecha span").text().trim();
-        const lugar = $(tr).find(".colstyle-fecha .ellipsis").attr("title") || "";
-        let fecha = parseDateTime(fechaTexto);
-        if (!fecha || isNaN(fecha)) fecha = jornadaInicio; // usar jornada si no hay fecha específica
+      const fechaRaw = $(tr).find(".colstyle-fecha span").first().text().trim();
+      const lugar = $(tr).find(".colstyle-fecha span .ellipsis").attr("title") || "";
 
-        // --- Solo registrar si hay equipos de Las Flores ---
-        const esLasFlores = equipos.some(e => e.includes("LAS FLORES SEVILLA"));
-        if (esLasFlores) {
-          partidos.push({
-            equipoLocal: equipos[0],
-            equipoVisitante: equipos[1],
-            fecha: fecha ? fecha.toISOString().split("T")[0] : "",
-            hora: fecha ? fecha.toISOString().split("T")[1].substring(0, 5) : "",
-            lugar,
-          });
-        }
-      });
+      const fechaHoraMatch = fechaRaw.match(/(\d{2}\/\d{2}\/\d{4}) (\d{2}:\d{2})/);
+      const fechaPartido = fechaHoraMatch ? fechaHoraMatch[1] : "";
+      const horaPartido = fechaHoraMatch ? fechaHoraMatch[2] : "";
+
+      const resultado = $(tr)
+        .find(".colstyle-parciales .vertical-result")
+        .first()
+        .text()
+        .replace(/\s+/g, " ")
+        .trim();
+
+      // Si el partido involucra a Las Flores
+      if (equipos.some(e => e.includes("LAS FLORES"))) {
+        partidos.push({
+          jornada: jornadaTitle.split("(")[0].trim(),
+          fecha: fechaPartido || `${jornadaInicio} a ${jornadaFin}`,
+          hora: horaPartido || "",
+          local: equipos[0],
+          visitante: equipos[1],
+          lugar,
+          resultado,
+        });
+      }
+    });
   });
 
+  console.log(`✅ ${partidos.length} partidos encontrados del C.D. LAS FLORES.`);
+
   if (partidos.length === 0) {
-    console.warn("⚠️ No se encontraron partidos del equipo.");
+    console.log("⚠️ No se encontraron partidos.");
     return;
   }
 
-  console.log(`✅ ${partidos.length} partidos encontrados.`);
+  // Crear CSV limpio
+  const csv =
+    "Jornada,Fecha,Hora,Local,Visitante,Lugar,Resultado\n" +
+    partidos
+      .map(
+        p =>
+          `${p.jornada},"${p.fecha}","${p.hora}","${p.local}","${p.visitante}","${p.lugar}","${p.resultado}"`
+      )
+      .join("\n");
 
-  // --- Crear CSV ---
-  const csv = [
-    "Equipo local,Equipo visitante,Fecha,Hora,Lugar",
-    ...partidos.map(
-      p => `${p.equipoLocal},${p.equipoVisitante},${p.fecha},${p.hora},${p.lugar}`
-    ),
-  ].join("\n");
-
-  fs.writeFileSync("public/calendario.csv", csv, "utf8");
+  fs.writeFileSync("public/calendario.csv", csv);
   console.log("📅 Archivo actualizado: public/calendario.csv");
 }
 
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+(async () => {
+  try {
+    await loadFederado();
+  } catch (err) {
+    console.error("❌ ERROR en update script:", err);
+    process.exit(1);
+  }
+})();
