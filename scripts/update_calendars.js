@@ -25,12 +25,10 @@ function normalize(s) {
 }
 
 function parseDateTime(text) {
-  // Busca patrones dd/mm/yyyy hh:mm en cualquier texto
-  const m = (text || "").match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
-  if (!m) return null;
-  const [_, d, M, Y, h, m] = m;
-  // Usamos hora local Madrid (UTC+1 en invierno); Apple/Google ajustan DST al importar
-  return new Date(`${Y}-${M}-${d}T${h}:${m}:00+01:00`);
+  const match = text.match(/(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
+  if (!match) return null;
+  const [_, d, M, Y, h, min] = match; // cambiamos 'm' por 'min' para evitar conflicto
+  return new Date(`${Y}-${M}-${d}T${h}:${min}:00+01:00`);
 }
 
 function parseDdmmyy(ddmmyy) {
