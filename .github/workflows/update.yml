@@ -1,41 +1,41 @@
-name: Update calendars daily
+name: Actualizar calendario
 
 on:
-  schedule:
-    - cron: '0 6 * * *'
   workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *" # Ejecutar todos los días a las 06:00 UTC
 
 permissions:
   contents: write
 
 jobs:
-  build-and-push:
+  update:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: Clean environment completely
+      - name: Install dependencies
         run: |
-          rm -rf node_modules package-lock.json package.json
-          npm cache clean --force
-          echo "✅ Entorno limpio"
+          npm install cheerio node-fetch
 
       - name: Run update script
         run: node scripts/update_calendars.js
 
-      - name: Commit and push calendar updates
+      - name: Commit and push updated CSV
         run: |
-          git config user.email "github-actions@github.com"
-          git config user.name "github-actions[bot]"
-          git add calendarios/*.ics
-          git commit -m "Automated update of calendars (IMD + FEDERADO) [ci skip]" || echo "No changes to commit"
-          git push
+          if [[ -f public/calendario.csv ]]; then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add public/calendario.csv
+            git commit -m "🗓️ Actualizar calendario automáticamente" || echo "No hay cambios que subir"
+            git push
+          else
+            echo "⚠️ No se generó ningún archivo calendario.csv"
+          fi
