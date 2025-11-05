@@ -2,6 +2,7 @@ name: Update calendars daily
 
 on:
   schedule:
+    # Ejecutar cada día a las 6:00 AM (hora UTC)
     - cron: '0 6 * * *'
   workflow_dispatch:
 
@@ -13,29 +14,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install chromium
-        run: sudo apt-get update && sudo apt-get install -y chromium-browser fonts-liberation
-
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
       - name: Install dependencies
-        run: npm install puppeteer puppeteer-extra puppeteer-extra-plugin-stealth node-fetch@2
+        run: npm install cheerio node-fetch@2
 
-      - name: Run calendar update script
+      - name: Run update script
         run: node scripts/update_calendars.js
 
-      - name: Commit and push changes
+      - name: Commit and push calendar updates
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "github-actions[bot]"
           git add calendarios/*.ics
-          git commit -m "Automated update of calendars (IMD + FEDERADO) [ci skip]" || exit 0
+          git commit -m "Automated update of calendars (IMD + FEDERADO) [ci skip]" || echo "No changes to commit"
           git push
