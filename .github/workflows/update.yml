@@ -13,6 +13,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      - name: Setup Google Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Setup Chromedriver
+        uses: nanasess/setup-chromedriver@v2
+
+      - name: Install Selenium WebDriver
+        run: npm install selenium-webdriver
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -29,10 +39,11 @@ jobs:
           npm cache clean --force
           echo "✅ Entorno limpio"
 
-      - name: Run update scripts
+      - name: Run update script
         run: |
           node scripts/update_calendars.js
-          node scripts/update_calendars_imd.js
+          node scripts/update_calendars_imd_selenium.js
+
 
 
       - name: Commit and push calendar updates
