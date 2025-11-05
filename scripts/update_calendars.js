@@ -27,13 +27,12 @@ function normalize(s) {
 function parseDateTime(text) {
   const match = text.match(/(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
   if (!match) return null;
-  const [_, d, M, Y, h, min] = match; // cambiamos 'm' por 'min' para evitar conflicto
+  const [_, d, M, Y, h, min] = match;
   return new Date(`${Y}-${M}-${d}T${h}:${min}:00+01:00`);
 }
 
-
 function parseDdmmyy(ddmmyy) {
-  // dd/mm/yy -> Date (a las 00:00 local)
+  // dd/mm/yy -> Date local
   const m = (ddmmyy || "").match(/(\d{2})\/(\d{2})\/(\d{2})/);
   if (!m) return null;
   const [_, d, M, yy] = m;
@@ -48,12 +47,10 @@ function addDays(date, days) {
 }
 
 function fmtICSDateTime(dt) {
-  // UTC en formato ICS
   return dt.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 }
 
 function fmtICSDate(d) {
-  // YYYYMMDD
   const Y = d.getUTCFullYear();
   const M = String(d.getUTCMonth() + 1).padStart(2, "0");
   const D = String(d.getUTCDate()).padStart(2, "0");
@@ -77,12 +74,12 @@ DTSTART:${fmtICSDateTime(evt.start)}
 END:VEVENT
 `;
     } else if (evt.type === "allday") {
-      // En iCalendar, DTEND es no-inclusivo → ponemos lunes para cubrir vie-dom completos
+      // En iCalendar, DTEND es no inclusivo → sumamos 1 día al final del rango
       ics += `BEGIN:VEVENT
 SUMMARY:${evt.summary}
 LOCATION:${evt.location}
 DTSTART;VALUE=DATE:${fmtICSDate(evt.start)}
-DTEND;VALUE=DATE:${fmtICSDate(evt.end)}
+DTEND;VALUE=DATE:${fmtICSDate(addDays(evt.end, 1))}
 END:VEVENT
 `;
     }
@@ -95,76 +92,53 @@ END:VEVENT
 }
 
 // --------- parser específico del HTML de FAVoley ---------
-//
-// Estructura que nos diste:
-// <h2 ...>Jornada N <span ...>(dd/mm/yy&nbsp;&ndash;&nbsp;dd/mm/yy)</span></h2>
-// ... <table> ... <tr> con:
-//   <td class="colstyle-equipo"> ... <span class="ellipsis" title="Equipo A"> ... </span> <span class="ellipsis" title="Equipo B"> ... </span>
-//   <td class="colstyle-fecha"><span ...>Sáb, 18/10/2025 10:00 GMT+1 <span class="ellipsis" title="LUGAR">LUGAR</span></span>
-// En jornadas sin hora: el <td class="colstyle-fecha"> está vacío o con data-sort 9999-99-99 ...
-
 async function loadFederado() {
   console.log("Cargando calendario Federado (todas las jornadas)...");
   const html = await fetchHtml(FED_URL);
 
-  // Separar por secciones de jornada usando <h2 ...>Jornada ...
-  const sections = html.split(/<h2[^>]*>[^<]*Jornada/).slice(1); // descartamos lo anterior a la 1ª jornada
-
+  const sections = html.split(/<h2[^>]*>[^<]*Jornada/).slice(1);
   const events = [];
 
   for (const sec of sections) {
-    // Rango de la jornada (para eventos sin hora)
-    // Busca "(dd/mm/yy&nbsp;&ndash;&nbsp;dd/mm/yy)"
+    // 🟢 Leer el rango literal del HTML (ej. 24/10/25 – 26/10/25)
     const range = sec.match(/\((\d{2}\/\d{2}\/\d{2})[^)]*?(\d{2}\/\d{2}\/\d{2})\)/);
-    let weekendStart = null, weekendEnd = null;
+    let weekendStart = null,
+      weekendEnd = null;
     if (range) {
-      const start = parseDdmmyy(range[1]); // viernes
-      const end = parseDdmmyy(range[2]);   // domingo
-      if (start && end) {
-        // Para iCal all-day, DTEND es no inclusivo: sumamos 1 día a domingo → lunes
-        weekendStart = start;
-        weekendEnd = addDays(end, 1);
-      }
+      weekendStart = parseDdmmyy(range[1]);
+      weekendEnd = parseDdmmyy(range[2]);
     }
 
-    // Extraer la primera <table ...> ... </table> dentro de esta jornada
     const tableMatch = sec.match(/<table[\s\S]*?<\/table>/);
     if (!tableMatch) continue;
-    const tableHtml = tableMatch[0];
-
-    // Partir por filas
-    const rows = tableHtml.split(/<tr[^>]*>/).slice(1);
+    const rows = tableMatch[0].split(/<tr[^>]*>/).slice(1);
 
     for (const row of rows) {
-      // Equipos: títulos dentro de colstyle-equipo
       const equipoTdMatch = row.match(/<td class="colstyle-equipo">([\s\S]*?)<\/td>/);
       if (!equipoTdMatch) continue;
-      const equipoTd = equipoTdMatch[1];
 
-      const teams = [...equipoTd.matchAll(/<span class="ellipsis" title="([^"]+)">/g)].map(m => m[1].trim());
+      const teams = [...equipoTdMatch[1].matchAll(/<span class="ellipsis" title="([^"]+)">/g)].map((m) => m[1].trim());
       if (teams.length < 2) continue;
 
       const [teamA, teamB] = teams;
       const isMorado = normalize(teamA) === normalize(TEAM_NAME_FED) || normalize(teamB) === normalize(TEAM_NAME_FED);
       if (!isMorado) continue;
 
-      // Fecha / lugar: dentro de colstyle-fecha
       const fechaTdMatch = row.match(/<td class="colstyle-fecha">([\s\S]*?)<\/td>/);
       const fechaTd = fechaTdMatch ? fechaTdMatch[1] : "";
-
       const date = parseDateTime(fechaTd);
       const lugarMatch = fechaTd.match(/<span class="ellipsis" title="([^"]+)">/);
       const lugar = (lugarMatch ? lugarMatch[1] : "Por confirmar").trim();
 
-      // Construir evento
-      const summary = `${teamA} vs ${teamB} (FEDERADO)`;
+      // 🟢 Quitar el texto “(FEDERADO)” del título
+      const summary = `${teamA} vs ${teamB}`;
 
       if (date) {
         events.push({
           type: "timed",
           summary,
           location: lugar,
-          start: date
+          start: date,
         });
       } else if (weekendStart && weekendEnd) {
         events.push({
@@ -172,11 +146,8 @@ async function loadFederado() {
           summary,
           location: lugar,
           start: weekendStart,
-          end: weekendEnd
+          end: weekendEnd,
         });
-      } else {
-        // Si no tenemos rango (muy raro), lo ignoramos para evitar basura
-        continue;
       }
     }
   }
@@ -196,9 +167,6 @@ async function loadFederado() {
       writeICS("federado.ics", fed);
       console.log(`✅ Calendario federado actualizado con ${fed.length} partidos.`);
     }
-
-    // Si quieres, aquí integraríamos también IMD y la fusión en un único .ics
-
   } catch (err) {
     console.error("ERROR:", err);
     process.exit(1);
