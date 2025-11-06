@@ -37,7 +37,10 @@ jobs:
 
       - name: Install deps
         run: npm install selenium-webdriver
-
+        
+      - name: Prepare debug folder
+        run: mkdir -p calendarios/debug
+        
       - name: Run update (Federado + IMD mínimo)
         env:
           CHROME_BIN: /usr/bin/google-chrome
