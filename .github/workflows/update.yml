@@ -42,6 +42,7 @@ jobs:
         env:
           CHROME_BIN: /usr/bin/google-chrome
           CHROMEDRIVER_PATH: /usr/local/bin/chromedriver
+          DEBUG_IMD: "1"  # <-- ACTIVAR MODO DEBUG
         run: |
           node scripts/update_calendars.js
           node scripts/update_calendars_imd_selenium.js
