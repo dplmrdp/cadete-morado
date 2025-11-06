@@ -25,43 +25,31 @@ jobs:
 
       - name: Clean environment completely
         run: |
-          rm -rf node_modules package-lock.json package.json
+          rm -rf node_modules package-lock.json
           npm cache clean --force
-          echo "✅ Entorno limpio"
+          echo "Entorno limpio"
 
-      # 🟢 Instalar Google Chrome y Chromedriver en el runner
       - name: Setup Google Chrome
         uses: browser-actions/setup-chrome@v1
 
       - name: Setup Chromedriver
         uses: nanasess/setup-chromedriver@v2
 
-      # 🟢 Instalar dependencias necesarias (Selenium + Chromedriver)
-      - name: Install Selenium and Chromedriver
-        run: |
-          npm install selenium-webdriver chromedriver
+      - name: Install deps
+        run: npm install selenium-webdriver
 
-      # 🟢 Ejecutar el script de FAVOLEY (federado)
-      - name: Run Federado update script
+      - name: Run update (Federado + IMD mínimo)
         env:
           CHROME_BIN: /usr/bin/google-chrome
           CHROMEDRIVER_PATH: /usr/local/bin/chromedriver
         run: |
           node scripts/update_calendars.js
-
-      # 🟣 Ejecutar el script de IMD (selenium)
-      - name: Run IMD update script
-        env:
-          CHROME_BIN: /usr/bin/google-chrome
-          CHROMEDRIVER_PATH: /usr/local/bin/chromedriver
-        run: |
           node scripts/update_calendars_imd_selenium.js
 
-      # 🟢 Subir los .ics actualizados
       - name: Commit and push calendar updates
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "github-actions[bot]"
-          git add calendarios/*.ics
+          git add calendarios/*.ics || true
           git commit -m "Automated update of calendars (IMD + FEDERADO) [ci skip]" || echo "No changes to commit"
           git push
