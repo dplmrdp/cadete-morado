@@ -3,7 +3,7 @@ const chrome = require("selenium-webdriver/chrome");
 const IMD_URL = "https://imd.sevilla.org/app/jjddmm_resultados/";
 
 async function main() {
-  console.log("Cargando calendario IMD (v2.1: abrir equipo y seleccionar todas las jornadas)…");
+  console.log("Cargando calendario IMD (v2.2: ejecutar datosequipo)…");
 
   const userDataDir = "/tmp/chrome-profile-" + Date.now();
   const options = new chrome.Options()
@@ -33,27 +33,30 @@ async function main() {
     const rows = await table.findElements(By.css("tbody tr"));
     console.log(`📋 Tabla de equipos encontrada (${rows.length} filas).`);
 
-    // Buscar la fila del Cadete Femenino Morado
-    let targetRow = null;
+    // Buscar la fila del Cadete Femenino Morado y extraer su ID de datosequipo('...')
+    let equipoID = null;
     for (const row of rows) {
-      const text = (await row.getText()).toUpperCase();
+      const html = await row.getAttribute("innerHTML");
+      const text = html.toUpperCase();
       if (text.includes("LAS FLORES SEVILLA MORADO") && text.includes("CADETE FEMENINO")) {
-        targetRow = row;
+        const match = html.match(/datosequipo\('([^']+)'\)/);
+        if (match) equipoID = match[1];
         break;
       }
     }
 
-    if (!targetRow) {
-      console.log("⚠️ No se encontró la fila del equipo CD LAS FLORES SEVILLA MORADO (CADETE FEMENINO).");
+    if (!equipoID) {
+      console.log("⚠️ No se encontró el ID del equipo CD LAS FLORES SEVILLA MORADO (CADETE FEMENINO).");
       return;
     }
 
-    console.log("✅ Fila encontrada: CD LAS FLORES SEVILLA MORADO (CADETE FEMENINO)");
-    const link = await targetRow.findElement(By.css("a"));
-    await link.click();
-    console.log("🖱️ Click en la fila ejecutado, cargando calendario del equipo...");
+    console.log(`✅ ID del equipo obtenido: ${equipoID}`);
+    console.log("▶️ Ejecutando datosequipo() directamente...");
 
-    // Esperar hasta 20 segundos a que aparezca el desplegable de jornadas
+    // Ejecutar el JavaScript que carga el calendario
+    await driver.executeScript(`datosequipo('${equipoID}')`);
+
+    // Esperar hasta que aparezca el desplegable de jornadas
     const sel = await driver.wait(until.elementLocated(By.id("seljor")), 20000);
     await driver.wait(until.elementIsVisible(sel), 20000);
     console.log("📅 Desplegable de jornadas detectado.");
@@ -69,10 +72,10 @@ async function main() {
     console.log(`✅ Se han encontrado ${jornadas.length} tablas de jornadas.`);
 
   } catch (err) {
-    console.error("❌ Error en scraping IMD v2.1:", err.message || err);
+    console.error("❌ Error en scraping IMD v2.2:", err.message || err);
   } finally {
     try { if (driver) await driver.quit(); } catch (_) {}
-    console.log("🏁 Proceso IMD v2.1 completado.");
+    console.log("🏁 Proceso IMD v2.2 completado.");
   }
 }
 
