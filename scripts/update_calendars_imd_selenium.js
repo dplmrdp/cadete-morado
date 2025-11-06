@@ -36,15 +36,20 @@ async function loadIMD() {
     .setChromeOptions(options)
     .build();
 
-  try {
-    // 1️⃣ Abrir página principal
-    await driver.get(IMD_URL);
-    await driver.wait(until.elementLocated(By.id("busqueda")), 15000);
+  console.log("✅ Navegador Chrome iniciado correctamente");
 
-    // 2️⃣ Buscar “las flores”
+  try {
+    await driver.get(IMD_URL);
+    console.log("🌐 Página IMD abierta:", IMD_URL);
+
+    await driver.wait(until.elementLocated(By.id("busqueda")), 15000);
+    console.log("🔎 Cuadro de búsqueda encontrado");
+
     const searchBox = await driver.findElement(By.id("busqueda"));
     await searchBox.clear();
     await searchBox.sendKeys("las flores");
+    console.log("⌨️  Texto 'las flores' introducido");
+
 
     // Esperar a que aparezcan resultados
     await driver.sleep(2000);
