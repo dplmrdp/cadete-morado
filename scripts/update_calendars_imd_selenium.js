@@ -1,11 +1,9 @@
 const { Builder, By, until, Key } = require("selenium-webdriver");
 const chrome = require("selenium-webdriver/chrome");
-
 const IMD_URL = "https://imd.sevilla.org/app/jjddmm_resultados/";
-const TEAM_KEYWORDS = ["LAS FLORES SEVILLA MORADO", "CADETE FEMENINO"];
 
 async function main() {
-  console.log("Cargando calendario IMD (v2: abrir equipo y seleccionar todas las jornadas)…");
+  console.log("Cargando calendario IMD (v2.1: abrir equipo y seleccionar todas las jornadas)…");
 
   const userDataDir = "/tmp/chrome-profile-" + Date.now();
   const options = new chrome.Options()
@@ -22,7 +20,7 @@ async function main() {
     console.log("✅ Navegador Chrome iniciado correctamente");
 
     await driver.get(IMD_URL);
-    console.log("🌐 Página IMD abierta:", IMD_URL);
+    console.log("🌐 Página IMD abierta: " + IMD_URL);
 
     // Buscar el cuadro de búsqueda
     const input = await driver.wait(until.elementLocated(By.id("busqueda")), 20000);
@@ -30,60 +28,51 @@ async function main() {
     await input.sendKeys("las flores", Key.ENTER);
     console.log("⌨️  Texto 'las flores' introducido y búsqueda lanzada con Enter");
 
-    // Esperar tabla
+    // Esperar tabla de equipos
     const table = await driver.wait(until.elementLocated(By.css("table.tt")), 20000);
     const rows = await table.findElements(By.css("tbody tr"));
     console.log(`📋 Tabla de equipos encontrada (${rows.length} filas).`);
 
-    // Buscar la fila que contiene el equipo correcto
-    let foundRow = null;
+    // Buscar la fila del Cadete Femenino Morado
+    let targetRow = null;
     for (const row of rows) {
       const text = (await row.getText()).toUpperCase();
-      if (TEAM_KEYWORDS.every(k => text.includes(k))) {
-        foundRow = row;
+      if (text.includes("LAS FLORES SEVILLA MORADO") && text.includes("CADETE FEMENINO")) {
+        targetRow = row;
         break;
       }
     }
 
-    if (!foundRow) {
-      console.warn(`⚠️ No se encontró la fila del equipo ${TEAM_KEYWORDS.join(" / ")}`);
+    if (!targetRow) {
+      console.log("⚠️ No se encontró la fila del equipo CD LAS FLORES SEVILLA MORADO (CADETE FEMENINO).");
       return;
     }
 
     console.log("✅ Fila encontrada: CD LAS FLORES SEVILLA MORADO (CADETE FEMENINO)");
-
-    // Hacer clic en la fila
-    await foundRow.findElement(By.css("a")).click();
+    const link = await targetRow.findElement(By.css("a"));
+    await link.click();
     console.log("🖱️ Click en la fila ejecutado, cargando calendario del equipo...");
 
-    // Esperar el desplegable de jornadas
-    const sel = await driver.wait(until.elementLocated(By.id("seljor")), 15000);
-    await driver.wait(until.elementIsVisible(sel), 5000);
+    // Esperar hasta 20 segundos a que aparezca el desplegable de jornadas
+    const sel = await driver.wait(until.elementLocated(By.id("seljor")), 20000);
+    await driver.wait(until.elementIsVisible(sel), 20000);
     console.log("📅 Desplegable de jornadas detectado.");
 
-    // Seleccionar “Todas”
-    const optionsEl = await sel.findElements(By.css("option"));
-    for (const opt of optionsEl) {
-      const txt = (await opt.getText()).trim().toLowerCase();
-      if (txt.includes("todas")) {
-        await opt.click();
-        console.log("✅ Seleccionada opción 'Todas las jornadas'");
-        break;
-      }
-    }
+    // Seleccionar la opción “Todas”
+    const optionTodas = await sel.findElement(By.css("option[value='']"));
+    await optionTodas.click();
+    console.log("📊 Seleccionada la opción 'Todas las jornadas'.");
 
-    // Esperar que aparezcan las tablas por jornada
-    const jornadaTables = await driver.wait(
-      until.elementsLocated(By.css("table.tt")),
-      20000
-    );
-    console.log(`📊 Se han detectado ${jornadaTables.length} tablas de jornadas cargadas.`);
+    // Esperar a que carguen todas las tablas de jornadas
+    await driver.wait(until.elementsLocated(By.css("table.tt")), 20000);
+    const jornadas = await driver.findElements(By.css("table.tt"));
+    console.log(`✅ Se han encontrado ${jornadas.length} tablas de jornadas.`);
 
   } catch (err) {
-    console.error("❌ Error en scraping IMD v2:", err && err.message ? err.message : err);
+    console.error("❌ Error en scraping IMD v2.1:", err.message || err);
   } finally {
     try { if (driver) await driver.quit(); } catch (_) {}
-    console.log("🏁 Proceso IMD v2 completado.");
+    console.log("🏁 Proceso IMD v2.1 completado.");
   }
 }
 
