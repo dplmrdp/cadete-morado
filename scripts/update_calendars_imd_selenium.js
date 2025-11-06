@@ -49,7 +49,19 @@ async function loadIMD() {
     await searchBox.clear();
     await searchBox.sendKeys("las flores");
     console.log("⌨️  Texto 'las flores' introducido");
-
+    
+// 🔄 Esperar a que aparezca la tabla con resultados
+try {
+  await driver.wait(until.elementLocated(By.css("table.tt")), 15000);
+  await driver.wait(async () => {
+    const rows = await driver.findElements(By.css("table.tt tbody tr"));
+    return rows.length > 0;
+  }, 10000);
+  console.log("📋 Tabla de equipos encontrada y cargada");
+} catch (e) {
+  console.error("❌ No se pudo cargar la tabla de equipos:", e.message);
+  return [];
+}
 
     // Esperar a que aparezcan resultados
     await driver.sleep(2000);
