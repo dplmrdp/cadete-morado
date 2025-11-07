@@ -311,30 +311,50 @@ async function findTeamGuidFromResultsHTML(pageHTML) {
     const rows = await resultsTable.findElements(By.css("tbody > tr"));
     log(`📋 Tabla de equipos detectada con ${rows.length} filas (incluye cabeceras).`);
 
-    // Leemos HTML para extraer GUID por robustez
-    const html = await driver.getPageSource();
-    const guid = await findTeamGuidFromResultsHTML(html);
+    // --- 🔍 Buscar el equipo "CD LAS FLORES SEVILLA MORADO (Cadete Femenino)" ---
+let equipoId = null;
+let filasTexto = [];
 
-    if (!guid) {
-      log("⚠️ No se pudo localizar GUID del equipo en los resultados. Intento por click directo…");
+for (const row of await table.findElements(By.css("tr"))) {
+  const celdas = await row.findElements(By.css("td"));
+  if (celdas.length < 3) continue; // omitir cabecera u otras filas
 
-      // Fallback: buscar fila por texto y hacer click en el enlace de la primera celda
-      let foundClickable = false;
-      for (const r of rows) {
-        const t = normalize(await r.getText());
-        if (t.includes(normalize(TEAM_EXACT)) && t.includes(normalize(TEAM_CATEGORY))) {
-          const a = await r.findElement(By.css("a[href='#']"));
-          await a.click();
-          foundClickable = true;
-          break;
-        }
-      }
-      if (!foundClickable) {
-        log(`❌ Equipo no encontrado en la tabla: '${TEAM_EXACT}' (${TEAM_CATEGORY}).`);
-        return;
-      }
-    } else {
-      log(`✅ GUID de equipo: ${guid}`);
+  const nombre = (await celdas[0].getText()).trim().toUpperCase();
+  const categoria = (await celdas[2].getText()).trim().toUpperCase();
+  filasTexto.push(`${nombre} | ${categoria}`);
+
+  // 🟢 Coincidencia estricta: solo "CD LAS FLORES SEVILLA MORADO" en "CADETE FEMENINO"
+  if (
+    nombre.includes("CD LAS FLORES SEVILLA MORADO") &&
+    categoria.includes("CADETE FEMENINO")
+  ) {
+    const enlace = await celdas[0].findElement(By.css("a"));
+    const onclick = await enlace.getAttribute("onclick");
+    const match = onclick.match(/datosequipo\('(.+?)'\)/);
+    if (match) equipoId = match[1];
+    console.log(`✅ Fila encontrada: ${nombre} (${categoria})`);
+    break;
+  }
+}
+
+// --- 📋 Si no encuentra el equipo, muestra información de depuración ---
+if (!equipoId) {
+  console.log(`⚠️ No se encontró el equipo "CD LAS FLORES SEVILLA MORADO" (CADETE FEMENINO).`);
+  console.log("Filas analizadas:");
+  for (const linea of filasTexto) console.log(" • " + linea);
+
+  // Guardar copia HTML de la tabla para depurar
+  const tablaHtml = await table.getAttribute("outerHTML");
+  await fs.promises.writeFile("calendarios/debug/listado_equipos.html", tablaHtml);
+  throw new Error("Equipo no encontrado en la tabla de IMD");
+}
+
+console.log(`✅ GUID del equipo seleccionado: ${equipoId}`);
+
+// --- Ejecutar datosequipo() para cargar el calendario ---
+await driver.executeScript(`datosequipo("${equipoId}")`);
+console.log("▶️ Ejecutando datosequipo() directamente...");
+
       // Llamar a datosequipo(guid) directamente: más fiable que el click
       await driver.executeScript(`return datosequipo('${guid}')`);
     }
