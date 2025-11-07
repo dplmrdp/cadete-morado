@@ -327,21 +327,21 @@ for (const row of await resultsTable.findElements(By.css("tr"))) {
   if (nombre.includes("CD LAS FLORES SEVILLA MORADO") && categoria.includes("CADETE FEMENINO")) {
     log(`✅ Fila encontrada: ${nombre} (${categoria})`);
 
-    try {
-      const enlace = await celdas[0].findElement(By.css("a"));
-      const onclick = (await enlace.getAttribute("onclick")) || "";
-      const cleanOnclick = onclick.trim();
-      const match = cleanOnclick.match(/datosequipo\(['"]?([A-F0-9-]+)['"]?\)/i);
+ try {
+  // En algunos casos Selenium no devuelve correctamente el atributo onclick, así que usamos el HTML completo de la fila
+  const rowHtml = await row.getAttribute("outerHTML");
+  const match = rowHtml.match(/datosequipo\('([A-F0-9-]+)'\)/i);
 
-      if (match && match[1]) {
-        equipoId = match[1];
-        log(`✅ GUID extraído correctamente: ${equipoId}`);
-      } else {
-        log(`⚠️ No se pudo extraer GUID del onclick: "${cleanOnclick}"`);
-      }
-    } catch (e) {
-      log(`❌ Error extrayendo GUID: ${e}`);
-    }
+  if (match && match[1]) {
+    equipoId = match[1];
+    log(`✅ GUID extraído correctamente desde HTML: ${equipoId}`);
+  } else {
+    log(`⚠️ No se encontró GUID en la fila (HTML parcial): ${rowHtml.substring(0, 200)}...`);
+  }
+} catch (e) {
+  log(`❌ Error analizando fila HTML: ${e}`);
+}
+
 
     break; // detenemos el bucle tras encontrar nuestro equipo
   }
