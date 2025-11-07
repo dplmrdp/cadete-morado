@@ -1,114 +1,122 @@
 // scripts/generate_index_html.js
-// Genera automáticamente el archivo index.html agrupando los calendarios .ics del directorio /calendarios
+// Genera automáticamente el index.html con enlaces a todos los calendarios .ics
+// Agrupa por categoría y ordena por edad: Benjamín → Alevín → Infantil → Cadete → Juvenil → Senior
 
 const fs = require("fs");
 const path = require("path");
 
-const CAL_DIR = path.join(__dirname, "../calendarios");
-const OUTPUT_HTML = path.join(__dirname, "../index.html");
+const CAL_DIR = path.join("calendarios");
+const OUT_FILE = "index.html";
+
+// Orden de categorías por edad (normalizadas)
+const ORDER = ["BENJAMIN", "ALEVIN", "INFANTIL", "CADETE", "JUVENIL", "SENIOR"];
+
+function normalize(s) {
+  return (s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+}
 
 // Leer todos los archivos .ics del directorio
 const files = fs
   .readdirSync(CAL_DIR)
-  .filter((f) => f.endsWith(".ics") && f.startsWith("imd_"));
+  .filter((f) => f.endsWith(".ics") && !f.includes("debug") && !f.startsWith("."))
+  .sort();
 
-// Agrupar por categoría (por ejemplo: imd_cadete_femenino_cd_las_flores_morado.ics)
-const groups = {};
+// Mapear categorías → equipos
+const categorias = {};
 
 for (const file of files) {
-  const match = file.match(/^imd_(.*?)_(cd|evb)_las_flores/i);
-  if (!match) continue;
+  const fullName = file.replace(".ics", "");
+  const fullPath = path.join(CAL_DIR, file);
 
-  const category = match[1].replace(/_/g, " ").toUpperCase();
-  if (!groups[category]) groups[category] = [];
+  // Detectar si es federado
+  if (normalize(fullName).includes("FEDERADO")) {
+    if (!categorias["FEDERADO"]) categorias["FEDERADO"] = [];
+    categorias["FEDERADO"].push({ name: fullName, path: fullPath });
+    continue;
+  }
 
-  const displayName = file
-    .replace(/^imd_/, "")
-    .replace(/\.ics$/, "")
-    .replace(/_/g, " ")
-    .toUpperCase()
-    .replace(/\bCD\b/g, "C.D.")
-    .replace(/\bEVB\b/g, "EVB");
+  // Detectar categoría según el nombre
+  let cat = "OTROS";
+  for (const c of ORDER) {
+    if (normalize(fullName).includes(c)) {
+      cat = c.charAt(0) + c.slice(1).toLowerCase(); // ejemplo: "CADETE" → "Cadete"
+      break;
+    }
+  }
 
-  groups[category].push({ file, displayName });
+  if (!categorias[cat]) categorias[cat] = [];
+  categorias[cat].push({ name: fullName, path: fullPath });
 }
 
-// Ordenar categorías alfabéticamente
-const sortedCats = Object.keys(groups).sort();
+// Ordenar categorías según el orden definido (Benjamín → Senior), federado siempre primero
+const orderedCats = Object.keys(categorias).sort((a, b) => {
+  if (a === "FEDERADO") return -1;
+  if (b === "FEDERADO") return 1;
+
+  const ai = ORDER.indexOf(normalize(a));
+  const bi = ORDER.indexOf(normalize(b));
+  if (ai === -1 && bi === -1) return a.localeCompare(b);
+  if (ai === -1) return 1;
+  if (bi === -1) return -1;
+  return ai - bi;
+});
 
 // Generar HTML
 let html = `<!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>🏐 Calendarios Club Las Flores</title>
+  <title>🏐 Calendarios C.D. Las Flores Sevilla</title>
   <style>
-    body {
-      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      margin: 2rem;
-      background: #fafafa;
-      color: #333;
-    }
-    h1 {
-      color: #7c3aed;
-    }
-    h2 {
-      margin-top: 2rem;
-      color: #444;
-      border-bottom: 2px solid #ddd;
-      padding-bottom: 0.2rem;
-    }
-    h3 {
-      margin-top: 1.2rem;
-      color: #555;
-    }
-    ul {
-      list-style: none;
-      padding-left: 1rem;
-    }
-    li {
-      margin: 0.4rem 0;
-    }
-    a {
-      text-decoration: none;
-      color: #1e40af;
-      font-weight: 500;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
-    .emoji {
-      font-size: 1.2em;
-    }
+    body { font-family: Arial, sans-serif; margin: 40px; background: #fafafa; color: #222; }
+    h1 { color: #800080; }
+    h2 { color: #444; margin-top: 2em; border-bottom: 2px solid #ddd; padding-bottom: 0.2em; }
+    ul { list-style-type: none; padding-left: 0; }
+    li { margin: 6px 0; }
+    a { text-decoration: none; color: #0055cc; }
+    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <h1>🏐 Calendarios Club Las Flores</h1>
-
-  <h2>🟠 FEDERADO</h2>
-  <ul>
-    <li><a href="calendarios/federado.ics">C.D. LAS FLORES SEVILLA MORADO (Cadete Femenino)</a></li>
-  </ul>
-
-  <h2>🟣 IMD</h2>
+  <h1>🏐 Calendarios C.D. Las Flores Sevilla</h1>
+  <p>Suscríbete directamente a los calendarios de los equipos del club:</p>
 `;
 
-// Agregar categorías IMD y sus enlaces
-for (const cat of sortedCats) {
-  html += `  <h3>🏐 ${cat}</h3>\n  <ul>\n`;
-  for (const { file, displayName } of groups[cat]) {
-    html += `    <li><a href="calendarios/${file}">${displayName}</a></li>\n`;
+for (const cat of orderedCats) {
+  const equipos = categorias[cat];
+
+  if (cat === "FEDERADO") {
+    html += `
+  <h2>🏆 ${cat}</h2>
+  <ul>
+`;
+  } else {
+    html += `
+  <h2>${cat}</h2>
+  <ul>
+`;
   }
+
+  for (const eq of equipos) {
+    const nameShown = eq.name.replace(/_/g, " ");
+    html += `    <li><a href="${eq.path}">📅 ${nameShown}</a></li>\n`;
+  }
+
   html += "  </ul>\n";
 }
 
 html += `
-  <p style="margin-top:3rem;font-size:0.9em;color:#666;">
-    📅 Pulsa en el nombre del equipo para <b>suscribirte</b> a su calendario (compatible con Google Calendar, Outlook, iPhone, etc.).
-  </p>
+  <footer style="margin-top:3em; font-size:0.9em; color:#666;">
+    Generado automáticamente por <b>update_calendars_imd_multi.js</b> — ${new Date().toLocaleString("es-ES")}
+  </footer>
 </body>
 </html>
 `;
 
-fs.writeFileSync(OUTPUT_HTML, html, "utf8");
-console.log(`✅ Archivo HTML generado: ${OUTPUT_HTML}`);
+// Escribir archivo
+fs.writeFileSync(OUT_FILE, html, "utf8");
+
+console.log(`✅ Archivo ${OUT_FILE} generado correctamente con ${files.length} calendarios.`);
