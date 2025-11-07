@@ -90,9 +90,16 @@ function addDays(date, days) {
 // ICS helpers (igual filosofía que federado)
 // ----------------------------
 function fmtICSDateTime(dt) {
-  // UTC en formato ICS
-  return dt.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  // Mantiene hora local (sin convertir a UTC)
+  const Y = dt.getFullYear();
+  const M = String(dt.getMonth() + 1).padStart(2, "0");
+  const D = String(dt.getDate()).padStart(2, "0");
+  const h = String(dt.getHours()).padStart(2, "0");
+  const m = String(dt.getMinutes()).padStart(2, "0");
+  const s = String(dt.getSeconds()).padStart(2, "0");
+  return `${Y}${M}${D}T${h}${m}${s}`;
 }
+
 function fmtICSDate(d) {
   // YYYYMMDD (UTC)
   const Y = d.getUTCFullYear();
@@ -211,7 +218,13 @@ async function parseAllJornadaTables(driver) {
       // Título y ubicación
       const home = localN === teamN;
       const rival = home ? visitante : local;
-      const summary = `${TEAM_EXACT} vs ${rival} (IMD)${home ? "" : ""}`;
+      let summary;
+if (home) {
+  summary = `${local} vs ${visitante} (IMD)`; // somos locales
+} else {
+  summary = `${local} vs ${visitante} (IMD)`; // somos visitantes
+}
+
       const descriptionParts = [];
       if (resultado && resultado !== "-") descriptionParts.push(`Resultado: ${resultado}`);
       if (obsEncuentro && obsEncuentro !== "-") descriptionParts.push(`Obs. Encuentro: ${obsEncuentro}`);
