@@ -143,14 +143,14 @@ PRODID:-//Las Flores//Calendario IMD Cadete Morado//ES
 
   for (const evt of events) {
     if (evt.type === "timed") {
--      ics += `BEGIN:VEVENT
+ics += `BEGIN:VEVENT
 -SUMMARY:${evt.summary}
 -LOCATION:${evt.location}
 -DTSTART:${fmtICSDateTime(evt.start)}
 -DESCRIPTION:${evt.description || ""}
 -END:VEVENT
 -`;
-+      ics += `BEGIN:VEVENT
+ics += `BEGIN:VEVENT
 +SUMMARY:${evt.summary}
 +LOCATION:${evt.location}
 +DTSTART;TZID=${ICS_TZID}:${fmtICSDateTimeTZID(evt.start)}
