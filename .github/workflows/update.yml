@@ -48,7 +48,7 @@ jobs:
           DEBUG_IMD: "1"  # <-- ACTIVAR MODO DEBUG
         run: |
           node scripts/update_calendars.js
-          node scripts/update_calendars_imd_selenium.js
+          node scripts/update_calendars_imd_multi.js
           
       - name: Upload debug artifacts
         if: always()  # se ejecuta incluso si el scraping falla
