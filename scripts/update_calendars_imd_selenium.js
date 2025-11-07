@@ -311,11 +311,11 @@ async function findTeamGuidFromResultsHTML(pageHTML) {
     const rows = await resultsTable.findElements(By.css("tbody > tr"));
     log(`📋 Tabla de equipos detectada con ${rows.length} filas (incluye cabeceras).`);
 
-    // --- 🔍 Buscar el equipo "CD LAS FLORES SEVILLA MORADO (Cadete Femenino)" ---
+   // --- 🔍 Buscar el equipo "CD LAS FLORES SEVILLA MORADO (Cadete Femenino)" ---
 let equipoId = null;
 let filasTexto = [];
 
-for (const row of await table.findElements(By.css("tr"))) {
+for (const row of await resultsTable.findElements(By.css("tr"))) {
   const celdas = await row.findElements(By.css("td"));
   if (celdas.length < 3) continue; // omitir cabecera u otras filas
 
@@ -332,32 +332,28 @@ for (const row of await table.findElements(By.css("tr"))) {
     const onclick = await enlace.getAttribute("onclick");
     const match = onclick.match(/datosequipo\('(.+?)'\)/);
     if (match) equipoId = match[1];
-    console.log(`✅ Fila encontrada: ${nombre} (${categoria})`);
+    log(`✅ Fila encontrada: ${nombre} (${categoria})`);
     break;
   }
 }
 
 // --- 📋 Si no encuentra el equipo, muestra información de depuración ---
 if (!equipoId) {
-  console.log(`⚠️ No se encontró el equipo "CD LAS FLORES SEVILLA MORADO" (CADETE FEMENINO).`);
-  console.log("Filas analizadas:");
-  for (const linea of filasTexto) console.log(" • " + linea);
+  log(`⚠️ No se encontró el equipo "CD LAS FLORES SEVILLA MORADO" (CADETE FEMENINO).`);
+  log("Filas analizadas:");
+  for (const linea of filasTexto) log(" • " + linea);
 
   // Guardar copia HTML de la tabla para depurar
-  const tablaHtml = await table.getAttribute("outerHTML");
-  await fs.promises.writeFile("calendarios/debug/listado_equipos.html", tablaHtml);
+  const tablaHtml = await resultsTable.getAttribute("outerHTML");
+  await fs.promises.writeFile(path.join(DEBUG_DIR, "listado_equipos.html"), tablaHtml);
   throw new Error("Equipo no encontrado en la tabla de IMD");
 }
 
-console.log(`✅ GUID del equipo seleccionado: ${equipoId}`);
+log(`✅ GUID del equipo seleccionado: ${equipoId}`);
 
 // --- Ejecutar datosequipo() para cargar el calendario ---
 await driver.executeScript(`datosequipo("${equipoId}")`);
-console.log("▶️ Ejecutando datosequipo() directamente...");
-
-      // Llamar a datosequipo(guid) directamente: más fiable que el click
-      await driver.executeScript(`return datosequipo('${guid}')`);
-    }
+log("▶️ Ejecutando datosequipo() directamente...");
 
     // Esperar a que aparezca el selector de jornadas
     const selJor = await driver.wait(until.elementLocated(By.id("seljor")), 15000);
