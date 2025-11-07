@@ -5,15 +5,28 @@ const TEAM_NAME_FED = "C.D. LAS FLORES SEVILLA MORADO";
 const FED_URL = "https://favoley.es/es/tournament/1321417/calendar/3652130/all";
 
 // --------- utilidades básicas ---------
-function fetchHtml(url) {
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => resolve(data));
-    }).on("error", reject);
-  });
+async function fetchHtml(url, retries = 3, delayMs = 3000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await new Promise((resolve, reject) => {
+        https.get(url, (res) => {
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => resolve(data));
+        }).on("error", reject);
+      });
+    } catch (err) {
+      console.warn(`⚠️ Error al conectar (intento ${attempt}/${retries}): ${err.message}`);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, delayMs));
+        console.log("↻ Reintentando conexión...");
+      } else {
+        throw err;
+      }
+    }
+  }
 }
+
 
 function normalize(s) {
   return (s || "")
