@@ -67,41 +67,23 @@ function parseTimeHHMM(s) {
   return { HH, mm };
 }
 
-// IMD (nov–mar) está en CET (UTC+01); los ejemplos que nos pasaste están en meses de invierno.
-// Si faltase la hora, creamos all-day (00:00 local con VALUE=DATE).
-const TZ_OFFSET = "+01:00";
-
-function toDateWithOffset({ yyyy, MM, dd }, timeOrNull) {
-  if (!timeOrNull) {
-    // all-day (lo trataremos como VALUE=DATE)
-    return { kind: "date", date: new Date(`${yyyy}-${MM}-${dd}T00:00:00${TZ_OFFSET}`) };
-  }
-  const { HH, mm } = timeOrNull;
-  return { kind: "datetime", date: new Date(`${yyyy}-${MM}-${dd}T${HH}:${mm}:00${TZ_OFFSET}`) };
-}
-
 function addDays(date, days) {
   const d = new Date(date.getTime());
   d.setDate(d.getDate() + days);
   return d;
 }
 
-// ---- zona ICS (reemplazar completa) ----
+// ----------------------------
+// ICS helpers (emitimos hora local sin convertir a UTC)
+// ----------------------------
 const ICS_TZID = "Europe/Madrid";
 
-function fmtICSDateTimeTZID(dt) {
-  // Formato local sin 'Z': YYYYMMDDTHHMMSS
+function fmtICSLocalParts(y, M, d, h, m) {
   const pad = (n) => String(n).padStart(2, "0");
-  const Y = dt.getFullYear();
-  const M = pad(dt.getMonth() + 1);
-  const D = pad(dt.getDate());
-  const h = pad(dt.getHours());
-  const m = pad(dt.getMinutes());
-  const s = pad(dt.getSeconds());
-  return `${Y}${M}${D}T${h}${m}${s}`;
+  return `${y}${pad(M)}${pad(d)}T${pad(h)}${pad(m)}00`;
 }
-
 function fmtICSDate(d) {
+  // YYYYMMDD en UTC (para all-day)
   const Y = d.getUTCFullYear();
   const M = String(d.getUTCMonth() + 1).padStart(2, "0");
   const D = String(d.getUTCDate()).padStart(2, "0");
@@ -118,11 +100,11 @@ PRODID:-//Las Flores//Calendario IMD Cadete Morado//ES
 
   for (const evt of events) {
     if (evt.type === "timed") {
-      // ✅ Solo este bloque para eventos con hora (sin el antiguo en UTC)
+      const { y, M, d, h, m } = evt.startLocalParts;
       ics += `BEGIN:VEVENT
 SUMMARY:${evt.summary}
 LOCATION:${evt.location}
-DTSTART;TZID=${ICS_TZID}:${fmtICSDateTimeTZID(evt.start)}
+DTSTART;TZID=${ICS_TZID}:${fmtICSLocalParts(y, M, d, h, m)}
 DESCRIPTION:${evt.description || ""}
 END:VEVENT
 `;
@@ -143,10 +125,6 @@ END:VEVENT
   fs.writeFileSync(outPath, ics);
   log(`✅ ICS escrito: ${outPath} (${events.length} eventos)`);
 }
-// ---- fin zona ICS ----
-
-
-
 
 // ----------------------------
 // Parsing de tablas de jornadas
@@ -168,21 +146,19 @@ async function parseAllJornadaTables(driver) {
 
   for (const table of tables) {
     jornadaIdx += 1;
-    // Detectar si es tabla de "Jornada Nº. X": primera fila tiene colspan y el texto incluye "Jornada Nº."
+    // Detectar si es tabla de "Jornada Nº. X"
     const headerCells = await table.findElements(By.css("tbody > tr:first-child td"));
     if (!headerCells.length) continue;
 
     const headerText = (await headerCells[0].getText()).trim();
     const isJornadaTable = /Jornada\s+N[ºo]\./i.test(headerText);
-    if (!isJornadaTable) {
-      continue; // saltar tablas que no son de jornada (p. ej., "Equipo Seleccionado")
-    }
+    if (!isJornadaTable) continue; // saltar tablas que no son de jornada
 
-    // Filas de datos: saltar la fila de cabecera (la que tiene los títulos de columnas)
+    // Filas de datos: saltar cabeceras
     const rows = await table.findElements(By.css("tbody > tr"));
     if (rows.length <= 2) continue; // 1 header + 1 títulos => sin datos
 
-    // La segunda fila suele ser cabecera de columnas; empezamos en i=2
+    // La segunda fila suele ser cabecera; empezamos en i=2
     for (let i = 2; i < rows.length; i++) {
       const cols = await rows[i].findElements(By.css("td"));
       if (cols.length < 8) continue;
@@ -200,9 +176,7 @@ async function parseAllJornadaTables(driver) {
         extractTextFromCell(obsResultadoEl),
       ]);
 
-      // Filtrado por equipo, usando el color de fondo como pista adicional cuando sea posible:
-      // - Nuestro equipo aparece con fondo distinto (en tus ejemplos, un azul/gris: #bfd0d9).
-      // - Pero no dependemos solo del color; validamos por texto exacto del equipo y categoría ya seleccionada.
+      // Filtrado por equipo
       const localN = normalize(local);
       const visitN = normalize(visitante);
       const teamN = normalize(TEAM_EXACT);
@@ -210,24 +184,16 @@ async function parseAllJornadaTables(driver) {
       const involvesTeam = localN === teamN || visitN === teamN;
       if (!involvesTeam) continue;
 
-      // Parse fecha / hora
+      // Parse fecha / hora (no convertimos a Date para timed)
       const d = parseDateDDMMYYYY(fecha);
       const t = parseTimeHHMM(hora);
       if (!d) {
         log(`⚠️ Fila ignorada por fecha inválida: "${fecha}"`);
         continue;
       }
-      const when = toDateWithOffset(d, t);
 
-      // Título y ubicación
-      const home = localN === teamN;
-      const rival = home ? visitante : local;
-      let summary;
-if (home) {
-  summary = `${local} vs ${visitante} (IMD)`; // somos locales
-} else {
-  summary = `${local} vs ${visitante} (IMD)`; // somos visitantes
-}
+      // Resumen siempre en orden Local vs Visitante (como en la tabla)
+      const summary = `${local} vs ${visitante} (IMD)`;
 
       const descriptionParts = [];
       if (resultado && resultado !== "-") descriptionParts.push(`Resultado: ${resultado}`);
@@ -235,22 +201,29 @@ if (home) {
       if (obsResultado && obsResultado !== "-") descriptionParts.push(`Obs. Resultado: ${obsResultado}`);
       const description = descriptionParts.join(" | ");
 
-      if (when.kind === "datetime") {
+      if (t) {
+        // Guardamos PARTES locales tal cual aparecen en la web
+        const y = Number(d.yyyy), M = Number(d.MM), day = Number(d.dd);
+        const hh = Number(t.HH), mm = Number(t.mm);
+
         allEvents.push({
           type: "timed",
           summary,
           location: lugar || "Por confirmar",
-          start: when.date,
+          startLocalParts: { y, M, d: day, h: hh, m: mm },
           description,
         });
       } else {
-        // all-day: crear rango de 1 día
+        // All-day: aquí sí usamos Date solo para sumar 1 día en UTC
+        const y = Number(d.yyyy), M = Number(d.MM), day = Number(d.dd);
+        const start = new Date(Date.UTC(y, M - 1, day, 0, 0, 0));
+        const end = addDays(start, 1);
         allEvents.push({
           type: "allday",
           summary,
           location: lugar || "Por confirmar",
-          start: when.date,
-          end: addDays(when.date, 1),
+          start,
+          end,
           description,
         });
       }
@@ -324,74 +297,64 @@ async function findTeamGuidFromResultsHTML(pageHTML) {
     );
 
     const resultsTable = await tab1.findElement(By.css("table.tt"));
-    // Contar filas
     const rows = await resultsTable.findElements(By.css("tbody > tr"));
     log(`📋 Tabla de equipos detectada con ${rows.length} filas (incluye cabeceras).`);
 
-  // --- 🔍 Buscar el equipo "CD LAS FLORES SEVILLA MORADO (Cadete Femenino)" ---
-let equipoId = null;
-let filasTexto = [];
+    // --- Buscar el equipo exacto ---
+    let equipoId = null;
+    let filasTexto = [];
 
-for (const row of await resultsTable.findElements(By.css("tr"))) {
-  const celdas = await row.findElements(By.css("td"));
-  if (celdas.length < 3) continue; // omitir cabecera u otras filas
+    for (const row of await resultsTable.findElements(By.css("tr"))) {
+      const celdas = await row.findElements(By.css("td"));
+      if (celdas.length < 3) continue; // omitir cabecera u otras filas
 
-  const nombre = (await celdas[0].getText()).trim().toUpperCase();
-  const categoria = (await celdas[2].getText()).trim().toUpperCase();
-  filasTexto.push(`${nombre} | ${categoria}`);
+      const nombre = (await celdas[0].getText()).trim().toUpperCase();
+      const categoria = (await celdas[2].getText()).trim().toUpperCase();
+      filasTexto.push(`${nombre} | ${categoria}`);
 
-  // 🟢 Coincidencia estricta: solo "CD LAS FLORES SEVILLA MORADO" en "CADETE FEMENINO"
-  if (nombre.includes("CD LAS FLORES SEVILLA MORADO") && categoria.includes("CADETE FEMENINO")) {
-    log(`✅ Fila encontrada: ${nombre} (${categoria})`);
+      if (nombre.includes("CD LAS FLORES SEVILLA MORADO") && categoria.includes("CADETE FEMENINO")) {
+        log(`✅ Fila encontrada: ${nombre} (${categoria})`);
+        try {
+          const rowHtml = await row.getAttribute("outerHTML");
+          const match = rowHtml.match(/datosequipo\('([A-F0-9-]+)'\)/i);
+          if (match && match[1]) {
+            equipoId = match[1];
+            log(`✅ GUID extraído correctamente desde HTML: ${equipoId}`);
+          } else {
+            log(`⚠️ No se encontró GUID en la fila.`);
+          }
+        } catch (e) {
+          log(`❌ Error analizando fila HTML: ${e}`);
+        }
+        break;
+      }
+    }
 
- try {
-  // En algunos casos Selenium no devuelve correctamente el atributo onclick, así que usamos el HTML completo de la fila
-  const rowHtml = await row.getAttribute("outerHTML");
-  const match = rowHtml.match(/datosequipo\('([A-F0-9-]+)'\)/i);
+    if (!equipoId) {
+      log(`⚠️ No se encontró el equipo "CD LAS FLORES SEVILLA MORADO" (CADETE FEMENINO).`);
+      log("Filas analizadas:");
+      for (const linea of filasTexto) log(" • " + linea);
 
-  if (match && match[1]) {
-    equipoId = match[1];
-    log(`✅ GUID extraído correctamente desde HTML: ${equipoId}`);
-  } else {
-    log(`⚠️ No se encontró GUID en la fila (HTML parcial): ${rowHtml.substring(0, 200)}...`);
-  }
-} catch (e) {
-  log(`❌ Error analizando fila HTML: ${e}`);
-}
+      const tablaHtml = await resultsTable.getAttribute("outerHTML");
+      await fs.promises.writeFile(path.join(DEBUG_DIR, "listado_equipos.html"), tablaHtml);
+      throw new Error("Equipo no encontrado en la tabla de IMD");
+    }
 
+    log(`✅ GUID del equipo seleccionado: ${equipoId}`);
 
-    break; // detenemos el bucle tras encontrar nuestro equipo
-  }
-}
+    // Cargar el calendario del equipo
+    await driver.executeScript(`datosequipo("${equipoId}")`);
+    log("▶️ Ejecutando datosequipo() directamente...");
 
-// --- 📋 Si no encuentra el equipo, muestra información de depuración ---
-if (!equipoId) {
-  log(`⚠️ No se encontró el equipo "CD LAS FLORES SEVILLA MORADO" (CADETE FEMENINO).`);
-  log("Filas analizadas:");
-  for (const linea of filasTexto) log(" • " + linea);
-
-  // Guardar copia HTML de la tabla para depurar
-  const tablaHtml = await resultsTable.getAttribute("outerHTML");
-  await fs.promises.writeFile(path.join(DEBUG_DIR, "listado_equipos.html"), tablaHtml);
-  throw new Error("Equipo no encontrado en la tabla de IMD");
-}
-
-log(`✅ GUID del equipo seleccionado: ${equipoId}`);
-
-// --- Ejecutar datosequipo() para cargar el calendario ---
-await driver.executeScript(`datosequipo("${equipoId}")`);
-log("▶️ Ejecutando datosequipo() directamente...");
-
-    // Esperar a que aparezca el selector de jornadas
+    // Esperar selector de jornadas y seleccionar "Todas"
     const selJor = await driver.wait(until.elementLocated(By.id("seljor")), 15000);
     await driver.wait(until.elementIsVisible(selJor), 10000);
     log("📅 Desplegable de jornadas localizado");
 
-    // Seleccionar "Todas"
     await selJor.sendKeys("Todas");
     log("📊 Seleccionada opción 'Todas'");
 
-    // Esperamos a que carguen todas las tablas de jornadas (múltiples tables.tt con encabezado "Jornada Nº.")
+    // Esperar a que carguen tablas de jornadas
     await driver.wait(async () => {
       const t1 = await driver.findElement(By.id("tab1"));
       const tables = await t1.findElements(By.css("table.tt"));
@@ -402,18 +365,17 @@ log("▶️ Ejecutando datosequipo() directamente...");
         const hText = (await headerCells[0].getText()).trim();
         if (/Jornada\s+N[ºo]\./i.test(hText)) countJ++;
       }
-      // Con los datos que nos has pasado, deberían ser varias (hasta 14)
       return countJ >= 1;
     }, 20000);
 
-    // Snapshot de depuración
+    // Snapshots de depuración
     const pageHTML = await driver.getPageSource();
     fs.writeFileSync(path.join(DEBUG_DIR, `imd_calendar_${RUN_STAMP}.html`), pageHTML);
     const screenshot = await driver.takeScreenshot();
     fs.writeFileSync(path.join(DEBUG_DIR, `imd_calendar_${RUN_STAMP}.png`), screenshot, "base64");
     log(`🧩 Snapshots guardados en ${DEBUG_DIR}`);
 
-    // Parseo de todas las jornadas
+    // Parseo de jornadas -> eventos
     const events = await parseAllJornadaTables(driver);
     log(`📦 Total partidos detectados (involucran '${TEAM_EXACT}'): ${events.length}`);
 
@@ -429,7 +391,6 @@ log("▶️ Ejecutando datosequipo() directamente...");
   } catch (err) {
     onError(err, "MAIN");
   } finally {
-    // Cerrar driver y limpiar temporal
     try {
       if (driver) await driver.quit();
       log("🧹 Chrome cerrado");
