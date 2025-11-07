@@ -100,6 +100,30 @@ function fmtICSDateTime(dt) {
   return `${Y}${M}${D}T${h}${m}${s}`;
 }
 
+// 👇 Añade esto junto a los helpers ICS
+const ICS_TZID = "Europe/Madrid";
+
+function fmtICSDateTimeTZID(dt, tzid = ICS_TZID) {
+  // Formatea la fecha 'dt' en la zona 'tzid' SIN convertir a Zulu (sin "Z")
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: tzid,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(dt).reduce((acc, p) => (acc[p.type] = p.value, acc), {});
+  const Y = parts.year;
+  const M = parts.month;
+  const D = parts.day;
+  const h = parts.hour;
+  const m = parts.minute;
+  const s = parts.second;
+  return `${Y}${M}${D}T${h}${m}${s}`; // sin 'Z'
+}
+
 function fmtICSDate(d) {
   // YYYYMMDD (UTC)
   const Y = d.getUTCFullYear();
@@ -114,19 +138,26 @@ VERSION:2.0
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 PRODID:-//Las Flores//Calendario IMD Cadete Morado//ES
++X-WR-TIMEZONE:${ICS_TZID}
 `;
 
   for (const evt of events) {
     if (evt.type === "timed") {
-      ics += `BEGIN:VEVENT
-SUMMARY:${evt.summary}
-LOCATION:${evt.location}
-DTSTART:${fmtICSDateTime(evt.start)}
-DESCRIPTION:${evt.description || ""}
-END:VEVENT
-`;
+-      ics += `BEGIN:VEVENT
+-SUMMARY:${evt.summary}
+-LOCATION:${evt.location}
+-DTSTART:${fmtICSDateTime(evt.start)}
+-DESCRIPTION:${evt.description || ""}
+-END:VEVENT
+-`;
++      ics += `BEGIN:VEVENT
++SUMMARY:${evt.summary}
++LOCATION:${evt.location}
++DTSTART;TZID=${ICS_TZID}:${fmtICSDateTimeTZID(evt.start)}
++DESCRIPTION:${evt.description || ""}
++END:VEVENT
++`;
     } else if (evt.type === "allday") {
-      // Para all-day: DTSTART;VALUE=DATE y DTEND no-inclusivo (día+1)
       ics += `BEGIN:VEVENT
 SUMMARY:${evt.summary}
 LOCATION:${evt.location}
@@ -143,6 +174,7 @@ END:VEVENT
   fs.writeFileSync(outPath, ics);
   log(`✅ ICS escrito: ${outPath} (${events.length} eventos)`);
 }
+
 
 // ----------------------------
 // Parsing de tablas de jornadas
