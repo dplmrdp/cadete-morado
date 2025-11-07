@@ -329,9 +329,11 @@ for (const row of await resultsTable.findElements(By.css("tr"))) {
     categoria.includes("CADETE FEMENINO")
   ) {
     const enlace = await celdas[0].findElement(By.css("a"));
-    const onclick = await enlace.getAttribute("onclick");
-    const match = onclick.match(/datosequipo\('(.+?)'\)/);
-    if (match) equipoId = match[1];
+   const onclick = await enlace.getAttribute("onclick");
+if (onclick) {
+  const match = onclick.match(/datosequipo\('(.+?)'\)/);
+  if (match) equipoId = match[1];
+}
     log(`✅ Fila encontrada: ${nombre} (${categoria})`);
     break;
   }
