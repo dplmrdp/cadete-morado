@@ -261,37 +261,53 @@ async function discoverTournamentIds(driver) {
 // ------------------------------------------------------------
 // ✔✔✔ NUEVA discoverGroupIds — FUNCIONANDO Y CONSERVANDO TU CÓDIGO
 // ------------------------------------------------------------
-async function discoverGroupIds(driver, tournamentId) {
+async function discoverGroupIds(driver, tournamentId){
+  // Abrimos la portada del torneo
   const url = `https://favoley.es/es/tournament/${tournamentId}`;
   log(`➡️ Abriendo torneo (solo DOM, sin clicks): ${url}`);
   await driver.get(url);
 
-  // Esperar a que cargue el select de grupos (aunque esté oculto tras overlays)
-  await driver.wait(until.elementLocated(By.css(".bootstrap-select")), 15000).catch(()=>{});
+  // Esperamos a que cargue algo con enlaces
+  await driver.wait(until.elementLocated(By.css("a[href]")), 15000);
 
-  // EXTRAER los grupos mediante JS, sin interactuar con la UI
-  const groups = await driver.executeScript(() => {
-    const result = [];
+  // Extraemos TODOS los enlaces que tengan /calendar/
+  const links = await driver.findElements(By.css('a[href*="/calendar/"]'));
 
-    // localizar la lista interna del bootstrap-select
-    const lis = document.querySelectorAll(".bootstrap-select .dropdown-menu.inner li");
+  const groups = new Map(); // nombreGrupo → groupId
 
-    lis.forEach(li => {
-      const span = li.querySelector("span.text");
-      if (!span) return;
+  for(const a of links){
+    const href = await a.getAttribute("href");
+    const text = (await a.getText()).trim();
 
-      const label = span.textContent.trim();
-      if (!label) return;
+    const m = href.match(/\/calendar\/(\d+)/);
+    if(!m) continue;
 
-      // Saltar cabeceras o división
-      if (li.classList.contains("divider")) return;
-      if (li.classList.contains("dropdown-header")) return;
+    const groupId = m[1];
 
-      result.push(label);
-    });
+    // si tiene texto útil, lo guardamos
+    const label = text || `Grupo ${groupId}`;
 
-    return result;
-  });
+    groups.set(label, groupId);
+  }
+
+  // DEBUG
+  if(groups.size === 0){
+    log(`⚠️ No se encontraron grupos por DOM en torneo ${tournamentId}`);
+    const html = await driver.getPageSource();
+    fs.writeFileSync(path.join(DEBUG_DIR, `federado_groups_empty_${tournamentId}.html`), html);
+  }
+
+  // Log detalle
+  if(groups.size > 0){
+    log(`📌 Grupos encontrados:`);
+    for(const [label,id] of groups.entries()){
+      log(`   → ${label} → ${id}`);
+    }
+  }
+
+  return [...groups.values()];
+}
+
 
   if (!groups.length) {
     log(`⚠️ No se encontraron grupos por DOM en torneo ${tournamentId}`);
