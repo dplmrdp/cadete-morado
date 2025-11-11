@@ -225,13 +225,13 @@ async function parseFederadoCalendarPage(driver, meta) {
 }
 
 // ------------------------------------------------------------
-// Descubrir torneos (lee la tabla y extrae id + categoría)
+// ✔✔✔ discoverTournamentIds — versión robusta
 // ------------------------------------------------------------
 async function discoverTournamentIds(driver) {
   await driver.get(BASE_LIST_URL);
   log(`🌐 Página base: ${BASE_LIST_URL}`);
 
-  // Snapshot para depuración siempre
+  // Guardar snapshot siempre
   try {
     const html0 = await driver.getPageSource();
     const debugPath = path.join(DEBUG_DIR, `fed_list_debug_${RUN_STAMP}.html`);
@@ -239,135 +239,75 @@ async function discoverTournamentIds(driver) {
     log(`📄 Snapshot HTML lista de torneos guardado en: ${debugPath}`);
   } catch (_) {}
 
-  // 1) Intento: esperar distintos patrones de tabla renderizada
+  // Esperar a que aparezcan enlaces o tabla
   try {
     await driver.wait(
-      async () => {
-        const candidates = await driver.findElements(
-          By.css(
-            "table.table tbody tr, .ml-table .table tbody tr, .table-responsive table tbody tr"
-          )
-        );
-        return candidates.length > 0;
-      },
-      25000
-    );
-  } catch (_) {
-    // seguimos al plan B (regex sobre HTML)
-  }
-
-  // 2) Intento DOM: leer filas si existen
-  let rows = [];
-  try {
-    rows = await driver.findElements(
-      By.css("table.table tbody tr, .ml-table .table tbody tr, .table-responsive table tbody tr")
+      until.elementLocated(By.css("a[href*='/es/tournament/'], table")),
+      20000
     );
   } catch (_) {}
 
+  const html = await driver.getPageSource();
   const tournaments = [];
 
-  if (rows.length > 0) {
-    // Vía DOM normal
-    for (const row of rows) {
-      try {
-        const a = await row.findElement(By.css("a[href*='/es/tournament/']"));
-        const href = await a.getAttribute("href");
-        const m = href.match(/\/es\/tournament\/(\d+)/);
-        if (!m) continue;
-        const id = m[1];
+  // Buscar IDs vía HTML (siempre funciona)
+  const idMatches = [...html.matchAll(/\/es\/tournament\/(\d+)\/summary/g)];
+  const ids = [...new Set(idMatches.map(m => m[1]))];
 
-        let category = "";
-        try {
-          const tdCat = await row.findElement(By.css("td.colstyle-categoria"));
-          category = (await tdCat.getText()).trim();
-        } catch (_) {}
+  for (const id of ids) {
+    // Extraer <tr> completo
+    const trRegex = new RegExp(
+      `<tr[\\s\\S]*?href="[^"]*/es/tournament/${id}/summary"[\\s\\S]*?<\\/tr>`,
+      "i"
+    );
+    const trMatch = html.match(trRegex);
+    const tr = trMatch ? trMatch[0] : "";
 
-        let label = "";
-        try {
-          const tdName = await row.findElement(By.css("td.colstyle-nombre"));
-          label = (await tdName.getText()).trim();
-        } catch (_) {}
-
-        tournaments.push({
-          id,
-          label: label || `Torneo ${id}`,
-          category: (normalize(category).toUpperCase() || "SIN-CATEGORIA").replace("JUNIOR", "JUVENIL"),
-        });
-      } catch (_) {}
-    }
-  }
-
-  // 3) Plan B: si no hay filas DOM, parsear el HTML con regex
-  if (tournaments.length === 0) {
-    log("⚠️ No se localizaron filas por DOM; aplicando extracción por HTML (regex)...");
-    const html = await driver.getPageSource();
-
-    // Capturar todos los IDs /es/tournament/{id}/summary
-    const ids = new Set();
-    for (const m of html.matchAll(/\/es\/tournament\/(\d+)\/summary/g)) {
-      ids.add(m[1]);
+    // Nombre
+    let label = "";
+    const nameMatch = tr.match(
+      /<td[^>]*class="[^"]*colstyle-nombre[^"]*"[^>]*>([\s\S]*?)<\/td>/i
+    );
+    if (nameMatch) {
+      label = normalize(nameMatch[1].replace(/<[^>]+>/g, " "));
     }
 
-    // Para cada id, intentar encontrar su <tr> completo y extraer campos
-    for (const id of ids) {
-      // Busca el TR que contiene el link del torneo
-      const trRegex = new RegExp(
-        `<tr[\\s\\S]*?href="[^"]*/es/tournament/${id}/summary"[\\s\\S]*?<\\/tr>`,
-        "i"
-      );
-      const trMatch = html.match(trRegex);
-      const tr = trMatch ? trMatch[0] : "";
-
-      // Nombre (columna .colstyle-nombre)
-      let label = "";
-      const nameMatch = tr.match(/<td[^>]*class="[^"]*colstyle-nombre[^"]*"[^>]*>([\\s\\S]*?)<\\/td>/i);
-      if (nameMatch) {
-        label = normalize(
-          nameMatch[1].replace(/<[^>]+>/g, " ")
-        ).trim();
-      }
-
-      // Categoría (columna .colstyle-categoria)
-      let category = "";
-      const catMatch = tr.match(/<td[^>]*class="[^"]*colstyle-categoria[^"]*"[^>]*>([\\s\\S]*?)<\\/td>/i);
-      if (catMatch) {
-        category = normalize(
-          catMatch[1].replace(/<[^>]+>/g, " ")
-        ).trim();
-      }
-
-      tournaments.push({
-        id,
-        label: label || `Torneo ${id}`,
-        category: (normalize(category).toUpperCase() || "SIN-CATEGORIA").replace("JUNIOR", "JUVENIL"),
-      });
+    // Categoría
+    let category = "";
+    const catMatch = tr.match(
+      /<td[^>]*class="[^"]*colstyle-categoria[^"]*"[^>]*>([\s\S]*?)<\/td>/i
+    );
+    if (catMatch) {
+      category = normalize(catMatch[1].replace(/<[^>]+>/g, " "));
     }
+
+    tournaments.push({
+      id,
+      label: label || `Torneo ${id}`,
+      category: (category.toUpperCase() || "SIN-CATEGORIA").replace("JUNIOR", "JUVENIL"),
+    });
   }
 
   log(`🔎 Torneos detectados: ${tournaments.length}`);
   return tournaments;
 }
 
-
 // ------------------------------------------------------------
-// Descubrir grupos leyendo <select name="group"> (sin clicks)
+// ✔✔✔ discoverGroupIds — 100% DOM, usando <select name="group">
 // ------------------------------------------------------------
 async function discoverGroupIds(driver, tournamentId) {
   const url = `https://favoley.es/es/tournament/${tournamentId}`;
   log(`➡️ Abriendo torneo (solo DOM): ${url}`);
   await driver.get(url);
 
-  // Esperamos a que cargue el select real
   let selectEl;
   try {
-    selectEl = await driver.wait(until.elementLocated(By.css("select[name='group']")), 15000);
+    selectEl = await driver.wait(
+      until.elementLocated(By.css("select[name='group']")),
+      15000
+    );
   } catch (e) {
     log(`⚠️ No se encontró <select name="group"> en torneo ${tournamentId}`);
-    // Guardamos snapshot para depurar
-    try {
-      const html = await driver.getPageSource();
-      fs.writeFileSync(path.join(DEBUG_DIR, `fed_groups_empty_${tournamentId}.html`), html);
-    } catch (_) {}
     return [];
   }
 
@@ -375,23 +315,26 @@ async function discoverGroupIds(driver, tournamentId) {
   const groups = [];
 
   for (const opt of options) {
-    try {
-      const value = await opt.getAttribute("value"); // groupId
-      const label = (await opt.getText()).trim();   // nombre del grupo
-      if (value) groups.push({ id: value, label });
-    } catch (_) {}
+    const value = await opt.getAttribute("value");
+    const label = (await opt.getText()).trim();
+    if (value) groups.push({ id: value, label });
   }
 
-  if (groups.length === 0) {
-    log(`⚠️ No se detectaron grupos en torneo ${tournamentId}`);
+  if (!groups.length) {
+    log(`⚠️ No se detectaron grupos para torneo ${tournamentId}`);
+    const html = await driver.getPageSource();
+    fs.writeFileSync(
+      path.join(DEBUG_DIR, `fed_groups_empty_${tournamentId}.html`),
+      html
+    );
   } else {
-    const msg = groups.map((g) => `${g.label} → ${g.id}`).join(" | ");
-    log(`📌 Grupos detectados: ${msg}`);
+    const txt = groups.map(g => `${g.label} → ${g.id}`).join(" | ");
+    log(`📌 Grupos detectados: ${txt}`);
   }
 
-  // devolvemos solo IDs
-  return groups.map((g) => g.id);
+  return groups;
 }
+
 
 // ------------------------------------------------------------
 // MAIN
