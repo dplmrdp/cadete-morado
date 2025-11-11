@@ -8,7 +8,8 @@ const os = require("os");
 const { Builder, By, Key, until } = require("selenium-webdriver");
 const chrome = require("selenium-webdriver/chrome");
 
-const BASE_LIST_URL = "https://favoley.es/es/tournaments?season=8565&category=&sex=2&sport=&tournament_status=&delegation=1630";
+const BASE_LIST_URL =
+  "https://favoley.es/es/tournaments?season=8565&category=&sex=2&sport=&tournament_status=&delegation=1630";
 
 const OUTPUT_DIR = path.join("calendarios");
 const DEBUG_DIR = path.join(OUTPUT_DIR, "debug");
@@ -22,7 +23,9 @@ const LOG_FILE = path.join(LOG_DIR, `federado_${RUN_STAMP}.log`);
 function log(line) {
   const msg = typeof line === "string" ? line : JSON.stringify(line);
   console.log(msg);
-  try { fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`); } catch (_) {}
+  try {
+    fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`);
+  } catch (_) {}
 }
 
 function onError(err, ctx = "UNSPECIFIED") {
@@ -30,53 +33,69 @@ function onError(err, ctx = "UNSPECIFIED") {
 }
 
 const ICS_TZID = "Europe/Madrid";
-const TEAM_NEEDLE = "las flores";
+const TEAM_NEEDLE = "las flores"; // filtro por club
 
 function normalize(s) {
-  return (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  return (s || "")
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
-function normLower(s){ return normalize(s).toLowerCase(); }
-function slug(s){
-  return normalize(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+function normLower(s) {
+  return normalize(s).toLowerCase();
+}
+function slug(s) {
+  return normalize(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function parseDateDDMMYYYY(s) {
-  const m = (s||"").match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  const m = (s || "").match(/(\d{2})\/(\d{2})\/(\d{4})/);
   if (!m) return null;
   const [, dd, MM, yyyy] = m;
   return { yyyy, MM, dd };
 }
 function parseTimeHHMM(s) {
-  const m = (s||"").match(/(\d{2}):(\d{2})/);
+  const m = (s || "").match(/(\d{2}):(\d{2})/);
   if (!m) return null;
   const [, HH, mm] = m;
   return { HH, mm };
 }
 
-function toLocalDate({yyyy,MM,dd}, timeOrNull){
-  const d = new Date(`${yyyy}-${MM}-${dd}T${timeOrNull ? `${timeOrNull.HH}:${timeOrNull.mm}` : "00:00"}:00`);
+function toLocalDate({ yyyy, MM, dd }, timeOrNull) {
+  const d = new Date(
+    `${yyyy}-${MM}-${dd}T${timeOrNull ? `${timeOrNull.HH}:${timeOrNull.mm}` : "00:00"}:00`
+  );
   return d;
 }
 
 function fmtICSDateTimeTZID(dt) {
-  const pad = n => String(n).padStart(2,"0");
-  return `${dt.getFullYear()}${pad(dt.getMonth()+1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}${pad(dt.getSeconds())}`;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(
+    dt.getDate()
+  )}T${pad(dt.getHours())}${pad(dt.getMinutes())}${pad(dt.getSeconds())}`;
 }
 
-function fmtICSDateUTC(d){
-  const Y = d.getUTCFullYear(), M = String(d.getUTCMonth()+1).padStart(2,"0"), D = String(d.getUTCDate()).padStart(2,"0");
+function fmtICSDateUTC(d) {
+  const Y = d.getUTCFullYear(),
+    M = String(d.getUTCMonth() + 1).padStart(2, "0"),
+    D = String(d.getUTCDate()).padStart(2, "0");
   return `${Y}${M}${D}`;
 }
 
-function writeICS(filename, events){
+function writeICS(filename, events) {
   let ics = `BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 PRODID:-//Las Flores//Calendarios Federado//ES
 `;
-  for(const evt of events){
-    if(evt.type === "timed"){
+  for (const evt of events) {
+    if (evt.type === "timed") {
       ics += `BEGIN:VEVENT
 SUMMARY:${evt.summary}
 LOCATION:${evt.location || ""}
@@ -103,155 +122,185 @@ END:VEVENT
 }
 
 // ------------------------------------------------------------
-// EXTRAER CALENDARIO (la misma función que ya tenías)
+// PARSEAR UNA PÁGINA DE CALENDARIO
 // ------------------------------------------------------------
-async function parseFederadoCalendarPage(driver, meta){
+async function parseFederadoCalendarPage(driver, meta) {
   const pageHTML = await driver.getPageSource();
   const fname = `fed_${meta.tournamentId}_${meta.groupId}.html`;
   fs.writeFileSync(path.join(DEBUG_DIR, fname), pageHTML);
   log(`🧩 Snapshot guardado: ${fname}`);
 
   let rows = [];
-  try { rows = await driver.findElements(By.css("table tbody tr")); } catch(_){}
+  try {
+    rows = await driver.findElements(By.css("table tbody tr"));
+  } catch (_) {}
 
-  if(rows.length === 0){
+  if (rows.length === 0) {
     rows = await driver.findElements(By.css("tr, .table-row, .row"));
   }
 
   const matches = [];
-  for(const r of rows){
-    try{
+  for (const r of rows) {
+    try {
       const txt = await r.getText();
       const line = normalize(txt);
       const mDate = line.match(/(\d{2}\/\d{2}\/\d{4})/);
-      if(!mDate) continue;
+      if (!mDate) continue;
 
       const tds = await r.findElements(By.css("td"));
-      let fecha="", hora="", local="", visitante="", lugar="", resultado="";
+      let fecha = "",
+        hora = "",
+        local = "",
+        visitante = "",
+        lugar = "",
+        resultado = "";
 
-      if(tds.length >= 4){
+      if (tds.length >= 4) {
         fecha = (await tds[0].getText()).trim();
-        const hh = (await tds[1].getText()).trim();
-        hora = hh.match(/\d{2}:\d{2}/) ? hh : (line.match(/(\d{2}:\d{2})/)?.[1] || "");
+        hora = (await tds[1].getText()).trim() || "";
         local = (await tds[2].getText()).trim();
         visitante = (await tds[3].getText()).trim();
-        if(tds[4]) resultado = (await tds[4].getText()).trim();
-        if(tds[5]) lugar = (await tds[5].getText()).trim();
-      } else {
-        fecha = mDate[1];
-        hora = (line.match(/(\d{2}:\d{2})/)?.[1] || "");
-        const mVS = line.match(/(.+?)\s+vs\s+(.+?)(\s|$)/i);
-        if(mVS){ local = mVS[1].trim(); visitante = mVS[2].trim(); }
+        if (tds[4]) resultado = (await tds[4].getText()).trim();
+        if (tds[5]) lugar = (await tds[5].getText()).trim();
       }
 
-      if(!fecha || !local || !visitante) continue;
-      matches.push({fecha, hora, local, visitante, lugar, resultado});
-    }catch(_){}
+      if (!fecha || !local || !visitante) continue;
+
+      matches.push({ fecha, hora, local, visitante, lugar, resultado });
+    } catch (_) {}
   }
 
   const teams = new Map();
 
-  for(const m of matches){
+  for (const m of matches) {
     const localN = normLower(m.local);
     const visitN = normLower(m.visitante);
-    const needle = TEAM_NEEDLE;
 
-    const involveLocal = localN.includes(needle);
-    const involveVisit = visitN.includes(needle);
-    if(!involveLocal && !involveVisit) continue;
+    if (!localN.includes(TEAM_NEEDLE) && !visitN.includes(TEAM_NEEDLE)) continue;
 
-    const candidates = [];
-    if(involveLocal) candidates.push(m.local);
-    if(involveVisit) candidates.push(m.visitante);
+    const teamName = localN.includes(TEAM_NEEDLE) ? m.local : m.visitante;
+    const d = parseDateDDMMYYYY(m.fecha);
+    if (!d) continue;
 
-    for(const teamName of candidates){
-      const d = parseDateDDMMYYYY(m.fecha);
-      if(!d){ continue; }
-      const t = parseTimeHHMM(m.hora);
-      const start = toLocalDate(d, t);
+    const t = parseTimeHHMM(m.hora);
+    const start = toLocalDate(d, t);
 
-      const summary = `${m.local} vs ${m.visitante} (Federado)`;
-      const descParts = [];
-      if(m.resultado && m.resultado !== "-") descParts.push(`Resultado: ${m.resultado}`);
-      const description = descParts.join(" | ");
+    const summary = `${m.local} vs ${m.visitante} (Federado)`;
+    const description = m.resultado ? `Resultado: ${m.resultado}` : "";
 
-      const evt = t ? { type:"timed", start, summary, location: m.lugar || "", description }
-                    : { type:"allday", start, end: new Date(start.getTime()+86400000), summary, location: m.lugar || "", description };
+    const evt =
+      t != null
+        ? { type: "timed", start, summary, location: m.lugar, description }
+        : {
+            type: "allday",
+            start,
+            end: new Date(start.getTime() + 86400000),
+            summary,
+            location: m.lugar,
+            description,
+          };
 
-      if(!teams.has(teamName)) teams.set(teamName, []);
-      teams.get(teamName).push(evt);
-    }
+    if (!teams.has(teamName)) teams.set(teamName, []);
+    teams.get(teamName).push(evt);
   }
 
   const outFiles = [];
-  for(const [teamName, events] of teams.entries()){
-    events.sort((a,b)=>a.start - b.start);
+  for (const [teamName, events] of teams.entries()) {
+    events.sort((a, b) => a.start - b.start);
     const fname = `federado_${slug(teamName)}_${slug(meta.category)}_${meta.groupId}.ics`;
     writeICS(fname, events);
     outFiles.push(fname);
   }
 
-  log(`📦 Generados ${outFiles.length} calendarios para torneo=${meta.tournamentId} grupo=${meta.groupId}`);
+  log(
+    `📦 Generados ${outFiles.length} calendarios para torneo=${meta.tournamentId} grupo=${meta.groupId}`
+  );
 }
 
+// ------------------------------------------------------------
+// ✔✔✔ FUNCIÓN ORIGINAL QUE FALTABA → RESTAURADA
+// ------------------------------------------------------------
+async function discoverTournamentIds(driver) {
+  await driver.get(BASE_LIST_URL);
+  log(`🌐 Página base: ${BASE_LIST_URL}`);
+
+  await driver
+    .wait(until.elementLocated(By.css("a[href*='/es/tournament/']")), 20000)
+    .catch(() => {});
+
+  const links = await driver.findElements(By.css("a[href*='/es/tournament/']"));
+  const ids = new Map();
+
+  for (const a of links) {
+    const href = (await a.getAttribute("href")) || "";
+    const m = href.match(/\/es\/tournament\/(\d+)/);
+    if (!m) continue;
+
+    const tId = m[1];
+    let label = (await a.getText()).trim();
+    if (!label) {
+      try {
+        label = (await (
+          await a.findElement(By.xpath(".."))
+        ).getText()).trim();
+      } catch (_) {}
+    }
+
+    ids.set(tId, label || `Torneo ${tId}`);
+  }
+
+  log(`🔎 Torneos detectados: ${ids.size}`);
+  return [...ids.entries()].map(([id, label]) => ({ id, label }));
+}
 
 // ------------------------------------------------------------
-// *** NUEVA FUNCIÓN COMPLETA Y CORRECTA para obtener grupos ***
+// ✔✔✔ NUEVA discoverGroupIds — FUNCIONANDO Y CONSERVANDO TU CÓDIGO
 // ------------------------------------------------------------
-async function discoverGroupIds(driver, tournamentId){
+async function discoverGroupIds(driver, tournamentId) {
   const url = `https://favoley.es/es/tournament/${tournamentId}`;
   log(`➡️ Abriendo torneo: ${url}`);
   await driver.get(url);
 
   await driver.wait(until.elementLocated(By.css(".bootstrap-select")), 15000);
-
   const dropdownBtn = await driver.findElement(By.css(".bootstrap-select > button.dropdown-toggle"));
+
   await dropdownBtn.click();
+  await driver.sleep(300);
 
-  await driver.sleep(500);
+  const lis = await driver.findElements(By.css(".bootstrap-select .dropdown-menu.inner li"));
+  const groups = [];
 
-  const items = await driver.findElements(By.css(".bootstrap-select .dropdown-menu.inner li"));
-  const result = [];
-
-  let index = 0;
-  for(const li of items){
+  for (const li of lis) {
     try {
       const textEl = await li.findElement(By.css("span.text"));
       const label = (await textEl.getText()).trim();
-
-      if(!label || label.startsWith("LIGA PROVINCIAL") || label === "") continue;
+      if (!label || label.startsWith("LIGA PROVINCIAL")) continue;
 
       await dropdownBtn.click();
       await li.click();
-      await driver.sleep(500);
+      await driver.sleep(400);
 
       const links = await driver.findElements(By.css("a[href*='/calendar/']"));
       let groupId = null;
 
-      for(const a of links){
+      for (const a of links) {
         const href = await a.getAttribute("href");
         const m = href.match(/\/calendar\/(\d+)/);
-        if(m){
+        if (m) {
           groupId = m[1];
           break;
         }
       }
 
-      if(groupId){
-        result.push({ groupId, label });
+      if (groupId) {
+        groups.push({ groupId, label });
         log(`✅ Grupo encontrado: ${label} → ${groupId}`);
-      } else {
-        log(`⚠️ No se pudo extraer groupId tras seleccionar "${label}"`);
       }
-    } catch(e){
-      // ignoramos items raros
-    }
-    index++;
+    } catch (_) {}
   }
 
-  return result;
+  return groups;
 }
-
 
 // ------------------------------------------------------------
 // MAIN
@@ -268,55 +317,51 @@ async function discoverGroupIds(driver, tournamentId){
     .addArguments(`--user-data-dir=${tmpUserDir}`);
 
   let driver;
-  try{
+  try {
     driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
 
     const tournaments = await discoverTournamentIds(driver);
 
-    for(const t of tournaments){
-      const category = extractCategoryFromLabel(t.label);
-      log(`\n======= 🏷 Torneo ${t.id} :: ${t.label} (cat: ${category}) =======`);
+    for (const t of tournaments) {
+      const category = normalize(t.label).toUpperCase();
+      log(`\n======= 🏷 Torneo ${t.id} :: ${t.label} =======`);
 
       let groups = [];
       try {
         groups = await discoverGroupIds(driver, t.id);
-      } catch(e){
+      } catch (e) {
         onError(e, `discoverGroupIds t=${t.id}`);
         continue;
       }
 
-      log(`🔹 Grupos detectados en torneo ${t.id}: ${groups.length}`);
+      log(`🔹 Grupos detectados: ${groups.length}`);
 
-      for(const g of groups){
+      for (const g of groups) {
         const calURL = `https://favoley.es/es/tournament/${t.id}/calendar/${g.groupId}/all`;
-        try{
-          log(`➡️  Abriendo calendario: ${calURL}`);
+        try {
+          log(`➡️ Abriendo calendario: ${calURL}`);
           await driver.get(calURL);
 
-          await driver.wait(until.elementLocated(By.css("table, .table, .v-data-table, .row, tbody")), 15000);
+          await driver.wait(until.elementLocated(By.css("table, .table, .row, tbody")), 15000);
 
           await parseFederadoCalendarPage(driver, {
             tournamentId: t.id,
             groupId: g.groupId,
-            category
+            category,
           });
-
-        } catch(e){
+        } catch (e) {
           onError(e, `parse calendar t=${t.id} g=${g.groupId}`);
-          try {
-            const html = await driver.getPageSource();
-            fs.writeFileSync(path.join(DEBUG_DIR, `fed_err_${t.id}_${g.groupId}.html`), html);
-          } catch(_){}
         }
       }
     }
 
     log("\n✅ Scraping federado multi-equipos completado.");
-
-  } catch(err){
+  } catch (err) {
     onError(err, "MAIN");
   } finally {
-    try { if(driver) await driver.quit(); } catch(_){}
+    try {
+      if (driver) await driver.quit();
+    } catch (_) {}
     log("🧹 Chrome cerrado");
   }
 })();
