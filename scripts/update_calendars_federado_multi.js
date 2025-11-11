@@ -267,42 +267,55 @@ async function discoverGroupIds(driver, tournamentId){
   log(`➡️ Abriendo torneo (solo DOM, sin clicks): ${url}`);
   await driver.get(url);
 
-  // Esperamos a que cargue algo con enlaces
-  await driver.wait(until.elementLocated(By.css("a[href]")), 15000);
+  // Esperamos a que haya enlaces cargados
+  try {
+    await driver.wait(until.elementLocated(By.css("a[href]")), 15000);
+  } catch(e) {
+    log(`⚠️ No se pudieron cargar enlaces en torneo ${tournamentId}`);
+  }
 
-  // Extraemos TODOS los enlaces que tengan /calendar/
-  const links = await driver.findElements(By.css('a[href*="/calendar/"]'));
+  let links = [];
+  try {
+    links = await driver.findElements(By.css('a[href*="/calendar/"]'));
+  } catch(e) {
+    log(`⚠️ Error buscando enlaces de grupos en torneo ${tournamentId}`);
+  }
 
-  const groups = new Map(); // nombreGrupo → groupId
+  const groups = new Map(); // nombre → id
 
   for(const a of links){
-    const href = await a.getAttribute("href");
-    const text = (await a.getText()).trim();
+    try {
+      const href = await a.getAttribute("href");
+      const text = (await a.getText()).trim();
 
-    const m = href.match(/\/calendar\/(\d+)/);
-    if(!m) continue;
+      const m = href.match(/\/calendar\/(\d+)/);
+      if(!m) continue;
 
-    const groupId = m[1];
+      const groupId = m[1];
+      const label = text || `Grupo ${groupId}`;
 
-    // si tiene texto útil, lo guardamos
-    const label = text || `Grupo ${groupId}`;
-
-    groups.set(label, groupId);
+      groups.set(label, groupId);
+    } catch(e){
+      log(`⚠️ Error procesando enlace de grupo: ${e}`);
+    }
   }
 
-  // DEBUG
+  // Si no hay grupos → guardar snapshot
   if(groups.size === 0){
     log(`⚠️ No se encontraron grupos por DOM en torneo ${tournamentId}`);
-    const html = await driver.getPageSource();
-    fs.writeFileSync(path.join(DEBUG_DIR, `federado_groups_empty_${tournamentId}.html`), html);
+
+    try {
+      const html = await driver.getPageSource();
+      const fname = `federado_groups_empty_${tournamentId}.html`;
+      fs.writeFileSync(path.join(DEBUG_DIR, fname), html);
+      log(`📄 Snapshot guardado: ${fname}`);
+    } catch(_){}
   }
 
-  // Log detalle
+  // Log detallado
   if(groups.size > 0){
-    log(`📌 Grupos encontrados:`);
-    for(const [label,id] of groups.entries()){
-      log(`   → ${label} → ${id}`);
-    }
+    const labels = [...groups.entries()].map(([l,id]) => `${l} → ${id}`).join(" | ");
+    log(`📌 Grupos encontrados (por DOM): ${labels}`);
   }
 
   return [...groups.values()];
