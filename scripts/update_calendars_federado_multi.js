@@ -261,44 +261,52 @@ async function discoverTournamentIds(driver) {
 // ------------------------------------------------------------
 // ✔✔✔ NUEVA discoverGroupIds — FUNCIONANDO Y CONSERVANDO TU CÓDIGO
 // ------------------------------------------------------------
-async function discoverGroupIds(driver, tournamentId){
-  // Abrimos la portada del torneo
+async function discoverGroupIds(driver, tournamentId) {
   const url = `https://favoley.es/es/tournament/${tournamentId}`;
-  log(`➡️ Abriendo torneo (solo DOM, sin clicks): ${url}`);
+  log(`➡️ Abriendo torneo (solo DOM): ${url}`);
   await driver.get(url);
 
-  // Esperamos a que haya enlaces cargados
+  // Esperamos a que cargue el select real
+  let selectEl;
   try {
-    await driver.wait(until.elementLocated(By.css("a[href]")), 15000);
-  } catch(e) {
-    log(`⚠️ No se pudieron cargar enlaces en torneo ${tournamentId}`);
+    selectEl = await driver.wait(
+      until.elementLocated(By.css("select[name='group']")),
+      15000
+    );
+  } catch (e) {
+    log(`⚠️ No se encontró <select name="group"> en torneo ${tournamentId}`);
+    return [];
   }
 
-  let links = [];
-  try {
-    links = await driver.findElements(By.css('a[href*="/calendar/"]'));
-  } catch(e) {
-    log(`⚠️ Error buscando enlaces de grupos en torneo ${tournamentId}`);
-  }
+  const options = await selectEl.findElements(By.css("option"));
+  const groups = [];
 
-  const groups = new Map(); // nombre → id
-
-  for(const a of links){
+  for (const opt of options) {
     try {
-      const href = await a.getAttribute("href");
-      const text = (await a.getText()).trim();
-
-      const m = href.match(/\/calendar\/(\d+)/);
-      if(!m) continue;
-
-      const groupId = m[1];
-      const label = text || `Grupo ${groupId}`;
-
-      groups.set(label, groupId);
-    } catch(e){
-      log(`⚠️ Error procesando enlace de grupo: ${e}`);
-    }
+      const value = await opt.getAttribute("value");
+      const label = (await opt.getText()).trim();
+      if (value) {
+        groups.push({ id: value, label });
+      }
+    } catch (_) {}
   }
+
+  if (groups.length === 0) {
+    log(`⚠️ No se detectaron grupos en torneo ${tournamentId}`);
+    const html = await driver.getPageSource();
+    fs.writeFileSync(
+      path.join(DEBUG_DIR, `fed_groups_empty_${tournamentId}.html`),
+      html
+    );
+  } else {
+    const msg = groups.map(g => `${g.label} → ${g.id}`).join(" | ");
+    log(`📌 Grupos detectados: ${msg}`);
+  }
+
+  // Devolvemos solo los IDs para procesar el calendario
+  return groups.map(g => g.id);
+}
+
 
   // Si no hay grupos → guardar snapshot
   if(groups.size === 0){
