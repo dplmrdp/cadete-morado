@@ -180,9 +180,10 @@ function parseFederadoHTML(html, meta) {
   }
 
   for (const [team, evs] of eventsByTeam.entries()) {
-    evs.sort((a, b) => a.start - b.start);
-    writeICS(team, evs);
-  }
+  evs.sort((a, b) => a.start - b.start);
+  writeICS(team, meta.category || "sin_categoria", evs);
+}
+
 
   console.log(`📦 Generados ${eventsByTeam.size} calendarios para t=${meta.tournamentId} g=${meta.groupId}`);
 }
