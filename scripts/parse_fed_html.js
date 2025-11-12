@@ -110,13 +110,18 @@ function parseFederadoHTML(html, meta) {
 
   for (const jornada of jornadas) {
     // 🟢 Detectar rango de jornada (ej: 17/10/25 – 19/10/25)
-    let weekendStart = null,
-      weekendEnd = null;
-    const range = jornada.match(/\((\d{2}\/\d{2}\/\d{2})[^)]*?(\d{2}\/\d{2}\/\d{2})\)/);
-    if (range) {
-      weekendStart = parseDdmmyy(range[1]);
-      weekendEnd = parseDdmmyy(range[2]);
-    }
+    let weekendStart = null, weekendEnd = null;
+const range = jornada.match(/\((\d{2}\/\d{2}\/(?:\d{2}|\d{4}))\D+(\d{2}\/\d{2}\/(?:\d{2}|\d{4}))\)/);
+
+if (range) {
+  weekendStart = parseDdmmyy(range[1]);
+  weekendEnd = parseDdmmyy(range[2]);
+  // Si por alguna razón no se detecta correctamente el año, corregimos
+  if (!weekendStart || isNaN(weekendStart)) weekendStart = new Date("1970-01-01");
+  if (!weekendEnd || isNaN(weekendEnd)) weekendEnd = addDays(weekendStart, 2);
+} else {
+  console.log("⚠️ No se detectó rango de jornada en:", jornada.slice(0, 80));
+}
 
     const tableMatch = jornada.match(/<table[\s\S]*?<\/table>/);
     if (!tableMatch) continue;
@@ -149,25 +154,26 @@ function parseFederadoHTML(html, meta) {
         if (visitN.includes(normLower(TEAM_NEEDLE))) equiposInvolucrados.push(teamB);
 
         let evt;
-        if (date) {
-          evt = {
-            type: "timed",
-            start: date,
-            summary: `${teamA} vs ${teamB}`,
-            location: lugar,
-          };
-        } else if (weekendStart && weekendEnd) {
-          evt = {
-            type: "allday",
-            start: weekendStart,
-            end: addDays(weekendEnd, 1), // ICS necesita fin +1 día
-            summary: `${teamA} vs ${teamB}`,
-            location: lugar,
-          };
-        } else {
-          console.log(`⚠️ Sin fecha ni rango para ${teamA} vs ${teamB}`);
-          continue;
-        }
+       if (date instanceof Date && !isNaN(date)) {
+  evt = {
+    type: "timed",
+    start: date,
+    summary: `${teamA} vs ${teamB}`,
+    location: lugar,
+  };
+} else if (weekendStart instanceof Date && weekendEnd instanceof Date) {
+  evt = {
+    type: "allday",
+    start: weekendStart,
+    end: addDays(weekendEnd, 1),
+    summary: `${teamA} vs ${teamB}`,
+    location: lugar,
+  };
+  console.log(`📅 Sin hora: usando jornada ${fmtICSDate(weekendStart)}–${fmtICSDate(weekendEnd)} para ${teamA} vs ${teamB}`);
+} else {
+  console.log(`⚠️ Sin fecha ni rango válido para ${teamA} vs ${teamB}`);
+  continue;
+}
 
         for (const t of equiposInvolucrados) {
           if (!eventsByTeam.has(t)) eventsByTeam.set(t, []);
