@@ -5,6 +5,7 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { parseFederadoHTML } = require("./parse_fed_html");
 const { Builder, By, until } = require("selenium-webdriver");
 const chrome = require("selenium-webdriver/chrome");
 
@@ -276,6 +277,14 @@ async function parseFederadoCalendarPage(driver, meta) {
   const snapName = `fed_${meta.tournamentId}_${meta.groupId}.html`;
   fs.writeFileSync(path.join(DEBUG_DIR, snapName), pageHTML);
   log(`🧩 Snapshot guardado: ${snapName}`);
+
+  // Llamar al parser local para generar los ICS directamente
+try {
+  parseFederadoHTML(pageHTML, meta);
+} catch (err) {
+  log(`⚠️ Error al parsear calendario t=${meta.tournamentId} g=${meta.groupId}: ${err}`);
+}
+
 
   // Plan A: tabla clásica
   let rows = [];
