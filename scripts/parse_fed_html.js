@@ -7,13 +7,33 @@ function normalize(s) {
 }
 function normLower(s) {
   return normalize(s).toLowerCase();
-}
 function parseDateTime(text) {
-  const m = text.match(/(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
-  if (!m) return null;
-  const [_, dd, MM, yyyy, HH, mm] = m;
-  return new Date(`${yyyy}-${MM}-${dd}T${HH}:${mm}:00+01:00`);
+  if (!text) return null;
+
+  // 1️⃣ formato dd/mm/yyyy hh:mm
+  let m = text.match(/(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
+  if (m) {
+    const [_, dd, MM, yyyy, HH, mm] = m;
+    return new Date(`${yyyy}-${MM}-${dd}T${HH}:${mm}:00+01:00`);
+  }
+
+  // 2️⃣ formato ISO dentro de data-sort="2025-10-18 08:00:00"
+  m = text.match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+  if (m) {
+    const [_, yyyy, MM, dd, HH, mm, ss] = m;
+    return new Date(`${yyyy}-${MM}-${dd}T${HH}:${mm}:${ss}+01:00`);
+  }
+
+  // 3️⃣ fallback: solo dd/mm/yyyy
+  m = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) {
+    const [_, dd, MM, yyyy] = m;
+    return new Date(`${yyyy}-${MM}-${dd}T00:00:00+01:00`);
+  }
+
+  return null;
 }
+
 function fmtICSDateTime(dt) {
   return dt.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 }
