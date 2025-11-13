@@ -22,13 +22,12 @@ const TEAM_ORDER = [
   "LAS FLORES ALBERO",
 ];
 
-// Iconos por equipo (puedes sustituir por imágenes si prefieres)
 const TEAM_ICONS = {
-  "LAS FLORES": "🌼",
-  "LAS FLORES MORADO": "🟣",
-  "LAS FLORES AMARILLO": "🟡",
-  "LAS FLORES PÚRPURA": "🟪",
-  "LAS FLORES ALBERO": "🟤",
+  "LAS FLORES": "icons/flores.svg",
+  "LAS FLORES MORADO": "icons/flores morado.svg",
+  "LAS FLORES AMARILLO": "icons/flores amarillo.svg",
+  "LAS FLORES PÚRPURA": "icons/flores purpura.svg",
+  "LAS FLORES ALBERO": "icons/flores albero.svg",
 };
 
 // --- Recopilar los ficheros .ics ---
@@ -146,7 +145,7 @@ function generateHTML(calendars) {
           Object.keys(TEAM_ICONS).find(k => team.includes(k)) || "LAS FLORES"
         ];
         const label = team.replace("C.D.", "").trim();
-        html += `<li><span class="icon">${icon}</span><a href="${filePath}">${label}</a></li>\n`;
+        html += `<li><img src="${icon}" alt="${team}" class="icon">${icon}</span><a href="${filePath}">${label}</a></li>\n`;
       }
 
       html += `</ul>\n`;
