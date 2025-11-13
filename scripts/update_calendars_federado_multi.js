@@ -688,6 +688,7 @@ async function parseFederadoCalendarPage(driver, meta) {
         // pausa corta entre grupos para no estresar el server
         await driver.sleep(400);
       }
+  }
     
 
     log("\n✅ Scraping federado multi-equipos completado.");
