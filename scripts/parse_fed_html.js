@@ -155,20 +155,25 @@ if (range) {
 
         let evt;
        if (date instanceof Date && !isNaN(date)) {
+  // 🔧 Ajuste horario: +1 hora para corregir desfase UTC
+  const localDate = new Date(date.getTime() + 60 * 60 * 1000);
+
   evt = {
     type: "timed",
-    start: date,
+    start: localDate,
     summary: `${teamA} vs ${teamB}`,
     location: lugar,
   };
 } else if (weekendStart instanceof Date && weekendEnd instanceof Date) {
   evt = {
-  type: "allday",
-  start: weekendStart,
-  end: weekendEnd,
-  summary: `${teamA} vs ${teamB}`,
-  location: lugar,
-};
+    type: "allday",
+    start: weekendStart,
+    end: weekendEnd,
+    summary: `${teamA} vs ${teamB}`,
+    location: lugar,
+  };
+}
+
   console.log(`📅 Sin hora: usando jornada ${fmtICSDate(weekendStart)}–${fmtICSDate(weekendEnd)} para ${teamA} vs ${teamB}`);
 } else {
   console.log(`⚠️ Sin fecha ni rango válido para ${teamA} vs ${teamB}`);
