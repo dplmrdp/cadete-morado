@@ -52,7 +52,7 @@ jobs:
           # IMD multi-equipo (genera todos los .ics, incluidos EVB LAS FLORES…)
           node scripts/update_calendars_imd_multi.js
           # Regenerar el index.html con los .ics detectados
-          node scripts/generate_index_html.js
+          node scripts/generate_index.js
 
       - name: Upload debug artifacts
         if: always()  # se ejecuta incluso si el scraping falla
