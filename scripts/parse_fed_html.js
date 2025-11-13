@@ -163,12 +163,12 @@ if (range) {
   };
 } else if (weekendStart instanceof Date && weekendEnd instanceof Date) {
   evt = {
-    type: "allday",
-    start: weekendStart,
-    end: addDays(weekendEnd, 1),
-    summary: `${teamA} vs ${teamB}`,
-    location: lugar,
-  };
+  type: "allday",
+  start: weekendStart,
+  end: weekendEnd,
+  summary: `${teamA} vs ${teamB}`,
+  location: lugar,
+};
   console.log(`📅 Sin hora: usando jornada ${fmtICSDate(weekendStart)}–${fmtICSDate(weekendEnd)} para ${teamA} vs ${teamB}`);
 } else {
   console.log(`⚠️ Sin fecha ni rango válido para ${teamA} vs ${teamB}`);
