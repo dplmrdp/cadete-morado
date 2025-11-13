@@ -662,9 +662,6 @@ async function parseFederadoCalendarPage(driver, meta) {
       log(`🔹 Grupos detectados: ${groups.length}${groups.length ? " → ["+groups.join(", ")+"]" : ""}`);
 
       for (const g of groups) {
-        if (g === "__INLINE__') {
-          // (nota: inline handled below)
-        }
         if (g === "__INLINE__") {
           try {
             await parseFederadoInlineCalendar(driver, {
@@ -691,7 +688,7 @@ async function parseFederadoCalendarPage(driver, meta) {
         // pausa corta entre grupos para no estresar el server
         await driver.sleep(400);
       }
-    }
+    
 
     log("\n✅ Scraping federado multi-equipos completado.");
   } catch (err) {
