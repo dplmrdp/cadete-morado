@@ -1,20 +1,74 @@
-<head>
-<meta charset="UTF-8">
-<title>Calendarios C.D. Las Flores</title>
-<style>
-  body {
-    font-family: "Segoe UI", Roboto, sans-serif;
-    background: #fafafa;
-    color: #222;
-    margin: 2em;
-    line-height: 1.5;
-  }
-  h1 {
-    text-align: center;
-    font-size: 2.4em;
-    margin-bottom: 1em;
-    color: #333;
-  }
-  /* ... más reglas CSS aquí ... */
-</style>
-</head>
+body {
+  font-family: "Segoe UI", Roboto, sans-serif;
+  background: #fafafa;
+  color: #222;
+  margin: 2em;
+  line-height: 1.5;
+}
+
+h1 {
+  text-align: center;
+  font-size: 2.6em;
+  color: #333;
+  margin-bottom: 1.5em;
+}
+
+.category {
+  font-size: 2em;
+  color: #004aad;
+  border-bottom: 3px solid #004aad;
+  margin-top: 2em;
+  padding-bottom: 0.3em;
+}
+
+h3 {
+  font-size: 1.3em;
+  margin-top: 1em;
+  margin-left: 0.5em;
+  padding: 0.3em 0.6em;
+  border-radius: 6px;
+  display: inline-block;
+  color: white;
+}
+
+/* Colores por tipo de competición */
+h3.federado {
+  background: #2c64d4; /* azul */
+}
+
+h3.imd {
+  background: #3fa35b; /* verde */
+}
+
+.team-list {
+  list-style: none;
+  margin-left: 2em;
+  padding-left: 0;
+}
+
+.team-list li {
+  margin: 0.4em 0;
+  display: flex;
+  align-items: center;
+  font-size: 1.1em;
+}
+
+.icon {
+  width: 28px;
+  height: 28px;
+  margin-right: 0.6em;
+  vertical-align: middle;
+  border-radius: 6px;
+  object-fit: contain;
+  background: white;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.15);
+}
+
+a {
+  text-decoration: none;
+  color: #0056b3;
+}
+
+a:hover {
+  text-decoration: underline;
+}
