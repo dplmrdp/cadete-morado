@@ -31,13 +31,12 @@ h3 {
   color: white;
 }
 
-/* Colores por tipo de competición */
 h3.federado {
-  background: #2c64d4; /* azul */
+  background: #2c64d4;
 }
 
 h3.imd {
-  background: #3fa35b; /* verde */
+  background: #3fa35b;
 }
 
 .team-list {
@@ -54,13 +53,14 @@ h3.imd {
 }
 
 .icon {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   margin-right: 0.6em;
   vertical-align: middle;
   border-radius: 6px;
   object-fit: contain;
-  background: white;
+  background: #fff;
+  border: 1px solid #ccc;
   box-shadow: 0 0 2px rgba(0, 0, 0, 0.15);
 }
 
