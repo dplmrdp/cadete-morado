@@ -636,60 +636,9 @@ async function parseFederadoCalendarPage(driver, meta) {
     .addArguments("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118 Safari/537.36")
     .addArguments(`--user-data-dir=${tmpUserDir}`);
 
-  let driver;
-  try {
-    driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
+ const { setupDriver } = require("./setupDriver");
+let driver = await setupDriver();
 
-    // 1) Torneos
-    const tournaments = await discoverTournamentIds(driver);
-    if (!tournaments.length) {
-      log("⚠️ No hay torneos: revisa el snapshot de la lista y la URL de filtros.");
-    }
-
-    // 2) Por torneo → grupos → calendario
-    for (const t of tournaments) {
-      const category = (normalize(t.category) || normalize(t.label)).toUpperCase();
-      log(`\n======= 🏷 Torneo ${t.id} :: ${t.label} (cat: ${category}) =======`);
-
-      let groups = [];
-      try {
-        groups = await discoverGroupIds(driver, t.id); // ["__INLINE__"] o ["3652...", ...]
-      } catch (e) {
-        onError(e, `discoverGroupIds t=${t.id}`);
-        continue;
-      }
-
-      log(`🔹 Grupos detectados: ${groups.length}${groups.length ? " → ["+groups.join(", ")+"]" : ""}`);
-
-      for (const g of groups) {
-        if (g === "__INLINE__") {
-          try {
-            await parseFederadoInlineCalendar(driver, {
-              tournamentId: t.id,
-              groupId: "inline",
-              category
-            });
-          } catch (e) {
-            onError(e, `parse inline calendar t=${t.id}`);
-          }
-          continue;
-        }
-
-        try {
-          await parseFederadoCalendarPage(driver, {
-            tournamentId: t.id,
-            groupId: g,
-            category
-          });
-        } catch (e) {
-          onError(e, `parse calendar t=${t.id} g=${g}`);
-        }
-
-        // pausa corta entre grupos para no estresar el server
-        await driver.sleep(400);
-      }
-  }
-    
 
     log("\n✅ Scraping federado multi-equipos completado.");
   } catch (err) {
