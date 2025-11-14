@@ -7,7 +7,26 @@ function normalizeBase(s) {
     .toUpperCase();
 }
 
-// Detecta colores
+function removeNoise(n) {
+  return n
+    .replace(/\bC\.?D\.?\b/g, " ")
+    .replace(/\bC\s*D\b/g, " ")
+    .replace(/\bCLUB\b/g, " ")
+    .replace(/\bVOLEIBOL\b/g, " ")
+    .replace(/\bSEVILLA\b/g, " ")
+    .replace(/\bJUVENIL\b/g, " ")
+    .replace(/\bJUVENOL\b/g, " ")
+    .replace(/\bCADETE\b/g, " ")
+    .replace(/\bINFANTIL\b/g, " ")
+    .replace(/\bALEVIN\b/g, " ")
+    .replace(/\bALEV[IÍ]N\b/g, " ")
+    .replace(/\bSENIOR\b/g, " ")
+    .replace(/\bSUB\b/g, " ")
+    .replace(/\b20\d{2}\b/g, " ") // años tipo "2025"
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function detectColor(n) {
   if (n.includes("AMARILLO")) return "AMARILLO";
   if (n.includes("ALBERO")) return "ALBERO";
@@ -16,49 +35,41 @@ function detectColor(n) {
   return null;
 }
 
+// -------------------------
+// NORMALIZADOR PRINCIPAL
+// -------------------------
 function normalizeTeamDisplay(raw) {
+  if (!raw) return "LAS FLORES";
+
   let n = normalizeBase(raw);
+  n = removeNoise(n);
 
-  // limpiar ruido común
-  n = n.replace(/\bC\.?D\.?\b/g, " ");
-  n = n.replace(/\bCLUB\b/g, " ");
-  n = n.replace(/\bVOLEIBOL\b/g, " ");
-  n = n.replace(/\bSEVILLA\b/g, " ");
-  n = n.replace(/\bJUVENIL\b/g, " ");
-  n = n.replace(/\bCADETE\b/g, " ");
-  n = n.replace(/\bINFANTIL\b/g, " ");
-  n = n.replace(/\bALEVIN\b/g, " ");
-  n = n.replace(/\bALEV[IÍ]N\b/g, " ");
-  n = n.replace(/\bSENIOR\b/g, " ");
-
-  n = n.replace(/\s+/g, " ").trim();
-
-  // detectar color
-  const color = detectColor(n);
-
-  // detectar si es EVB
   const isEVB = n.includes("EVB");
 
-  // construir nombre final
+  const color = detectColor(n);
+
+  // Si es EVB
   if (isEVB) {
-    return color ? `EVB LAS FLORES ${color}` : `EVB LAS FLORES`;
+    if (color) return `EVB LAS FLORES ${color}`;
+    return `EVB LAS FLORES`;
   }
 
-  // si no es EVB pero es LAS FLORES
-  if (n.includes("LAS FLORES")) {
-    return color ? `LAS FLORES ${color}` : `LAS FLORES`;
-  }
+  // No es EVB → LAS FLORES solamente
+  if (color) return `LAS FLORES ${color}`;
 
-  // si no es de Las Flores, devolver limpio
-  return n;
+  return "LAS FLORES";
 }
 
+// -------------------------
+// SLUG (nombre de archivo ICS)
+// -------------------------
 function normalizeTeamSlug(raw) {
-  const disp = normalizeTeamDisplay(raw).toLowerCase();
+  const disp = normalizeTeamDisplay(raw).toUpperCase();
 
   return disp
-    .replace(/ /g, "_")
-    .replace(/[^a-z0-9_]/g, "");
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^\w_]/g, "");
 }
 
 module.exports = {
