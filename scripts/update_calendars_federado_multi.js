@@ -67,19 +67,27 @@ function parseTimeHHMM(s) {
 }
 
 // -------------------------
-// toLocalDate: crea un Date representando la hora local en Europe/Madrid
-// tomando la fecha (yyyy,MM,dd) y la hora (HH,mm).
-// Esto evita poner offsets fijos y respeta DST.
+// NUEVA: toLocalDate robusta para Europe/Madrid
+// - Respeta DST (CET/CEST) usando Intl
+// - Evita reinterpretaciones por timezone del servidor (ej. runners en UTC)
+// Devuelve un Date cuyo components representan la hora real en Madrid
 // -------------------------
 function toLocalDate({ yyyy, MM, dd }, timeOrNull) {
   const h = timeOrNull ? parseInt(timeOrNull.HH, 10) : 0;
   const m = timeOrNull ? parseInt(timeOrNull.mm, 10) : 0;
 
-  // 1) Crear un Date UTC con los componentes pedidos (como si fueran UTC)
-  const dtUtc = new Date(Date.UTC(parseInt(yyyy,10), parseInt(MM,10)-1, parseInt(dd,10), h, m, 0));
+  // 1) Creamos un instante UTC con las componentes proporcionadas
+  const instantUtc = new Date(Date.UTC(
+    parseInt(yyyy, 10),
+    parseInt(MM, 10) - 1,
+    parseInt(dd, 10),
+    h,
+    m,
+    0
+  ));
 
-  // 2) Usar Intl para formatear esa fecha en Europe/Madrid y obtener componentes locales
-  const formatter = new Intl.DateTimeFormat("en-GB", {
+  // 2) Preguntamos a Intl cómo se representa ese instante en Europe/Madrid
+  const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/Madrid",
     year: "numeric",
     month: "2-digit",
@@ -87,21 +95,17 @@ function toLocalDate({ yyyy, MM, dd }, timeOrNull) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false
-  });
+  }).formatToParts(instantUtc);
 
-  const parts = formatter.formatToParts(dtUtc);
-  const out = {};
-  for (const p of parts) {
-    if (p.type === "year") out.y = p.value;
-    if (p.type === "month") out.m = p.value;
-    if (p.type === "day") out.d = p.value;
-    if (p.type === "hour") out.H = p.value;
-    if (p.type === "minute") out.M = p.value;
-  }
+  const y = parseInt(parts.find(p => p.type === "year").value, 10);
+  const mo = parseInt(parts.find(p => p.type === "month").value, 10);
+  const d = parseInt(parts.find(p => p.type === "day").value, 10);
+  const H = parseInt(parts.find(p => p.type === "hour").value, 10);
+  const M = parseInt(parts.find(p => p.type === "minute").value, 10);
 
-  // 3) Construir una fecha ISO local (no con zona) y crear Date a partir de ella
-  const isoLocal = `${out.y}-${out.m}-${out.d}T${out.H}:${out.M}:00`;
-  return new Date(isoLocal);
+  // 3) Construimos un Date con esas componentes (interpreta como LOCAL del entorno,
+  //    pero las componentes ya correspoden a la hora de Madrid; esto evita doble offset)
+  return new Date(y, mo - 1, d, H, M, 0);
 }
 
 // -------------------------
@@ -142,7 +146,8 @@ END:VEVENT
     } else if (evt.type === "allday") {
       // evt.startDateParts and evt.endDateParts expected: {yyyy,MM,dd}
       const dtStart = fmtICSDateYYYYMMDD_fromParts(evt.startDateParts.yyyy, evt.startDateParts.MM, evt.startDateParts.dd);
-      const endPlusOne = addDaysToDateParts(evt.endDateParts, 1); // DTEND is exclusive: end + 1
+      // DTEND must be exclusive => add 1 day
+      const endPlusOne = addDaysToDateParts(evt.endDateParts, 1);
       const dtEnd = fmtICSDateYYYYMMDD_fromParts(endPlusOne.yyyy, endPlusOne.MM, endPlusOne.dd);
       ics += `BEGIN:VEVENT
 SUMMARY:${escapeICSText(evt.summary)}
@@ -179,7 +184,12 @@ function normalizeTeamForFilename(raw) {
   n = n.replace(/\d+/g, " ");
 
   // 3) reemplazar símbolos no alfanum por espacio
-  n = n.replace(/[^\p{L}0-9]+/gu, " ");
+  try {
+    n = n.replace(/[^\p{L}0-9]+/gu, " ");
+  } catch (e) {
+    // fallback para entornos que no soporten \p{L}
+    n = n.replace(/[^a-z0-9áéíóúüñÁÉÍÓÚÜÑ]+/gi, " ");
+  }
 
   // 4) colapsar espacios
   n = n.replace(/\s+/g, " ").trim();
@@ -206,19 +216,25 @@ function normalizeTeamForFilename(raw) {
 // -------------------------
 function extractJornadaRangeFromHTML(html) {
   if (!html) return null;
-  // Buscar patrón dd/mm/yy(yy) – dd/mm/yy(yy)
-  const m = html.match(/Jornada\s*\d+\s*<[^>]*>\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*(?:&nbsp;|&nbsp;|&mdash;|–|—|-)\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})/i)
-    || html.match(/<h2[^>]*>[^<]*<span[^>]*>\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*(?:&nbsp;|&nbsp;|&mdash;|–|—|-)\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*<\/span>/i);
+  // Normalizar html para facilitar matches
+  const h = (html || "").replace(/\n/g, " ");
 
+  // Buscamos el patrón común dentro de un h2 con "Jornada"
+  let m = h.match(/Jornada\s*\d+\s*<[^>]*>\s*\(?\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*(?:&nbsp;|&ndash;|&mdash;|–|—|-)\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*\)?/i);
   if (!m) {
-    // intentar una variante más simple: buscar cualquier dd/mm/yy – dd/mm/yy en el html cerca de "Jornada"
-    const m2 = html.match(/([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*(?:&nbsp;|&nbsp;|&mdash;|–|—|-)\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})/);
-    if (!m2) return null;
-    return {
-      start: parseDateDDMMYYYY(m2[1]),
-      end: parseDateDDMMYYYY(m2[2])
-    };
+    m = h.match(/Jornada\s*\d+[^<]*?\(?\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*(?:&nbsp;|&ndash;|&mdash;|–|—|-)\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*\)?/i);
   }
+  if (!m) {
+    // intento más liberal: cualquier "dd/mm/yy – dd/mm/yy" cercano a palabra Jornada
+    const idx = h.search(/Jornada/i);
+    if (idx !== -1) {
+      const snippet = h.slice(idx, idx + 200);
+      const m2 = snippet.match(/([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*(?:&nbsp;|&ndash;|&mdash;|–|—|-)\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})/);
+      if (m2) m = m2;
+    }
+  }
+
+  if (!m) return null;
 
   const start = parseDateDDMMYYYY(m[1]);
   const end = parseDateDDMMYYYY(m[2]);
@@ -256,7 +272,7 @@ async function discoverTournamentIds(driver) {
   const tournaments = [];
   for (const tr of trs) {
     try {
-      const a = await tr.findElement(By.css('td.colstyle-estado a[href*=\"/tournament/\"]'));
+      const a = await tr.findElement(By.css('td.colstyle-estado a[href*="/tournament/"]'));
       const href = await a.getAttribute("href");
       const m = href && href.match(/\/tournament\/(\d+)\//);
       if (!m) continue;
