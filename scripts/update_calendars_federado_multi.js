@@ -6,9 +6,11 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { parseFederadoHTML } = require("./parse_fed_html");
-const { By, until } = require("selenium-webdriver");
+const { Builder, By, until } = require("selenium-webdriver");
 const chrome = require("selenium-webdriver/chrome");
-const { setupDriver } = require("./setupDriver");
+
+// Importar utilidades de nombres (reglas EVB / color / limpieza)
+const { normalizeTeamDisplay, normalizeTeamSlug } = require("./team_name_utils");
 
 // --- Config ---
 const BASE_LIST_URL = "https://favoley.es/es/tournaments?season=8565&category=&sex=2&sport=&tournament_status=&delegation=1630";
@@ -67,7 +69,47 @@ function parseTimeHHMM(s) {
 }
 
 // -------------------------
-// Helpers de formato ICS y fechas en TZ Europe/Madrid
+// toLocalDate: crea un Date representando la hora local en Europe/Madrid
+// tomando la fecha (yyyy,MM,dd) y la hora (HH,mm).
+// Esto evita poner offsets fijos y respeta DST.
+// -------------------------
+function toLocalDate({ yyyy, MM, dd }, timeOrNull) {
+  const h = timeOrNull ? parseInt(timeOrNull.HH, 10) : 0;
+  const m = timeOrNull ? parseInt(timeOrNull.mm, 10) : 0;
+
+  // 1) Crear un Date UTC con los componentes pedidos (como si fueran UTC)
+  const dtUtc = new Date(Date.UTC(parseInt(yyyy,10), parseInt(MM,10)-1, parseInt(dd,10), h, m, 0));
+
+  // 2) Usar Intl para formatear esa fecha en Europe/Madrid y obtener componentes locales
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(dtUtc);
+  const out = {};
+  for (const p of parts) {
+    if (p.type === "year") out.y = p.value;
+    if (p.type === "month") out.m = p.value;
+    if (p.type === "day") out.d = p.value;
+    if (p.type === "hour") out.H = p.value;
+    if (p.type === "minute") out.M = p.value;
+  }
+
+  // 3) Construir una fecha ISO local (no con zona) y crear Date a partir de ella
+  // Esto produce un Date en la zona horaria del servidor; lo importante es que las
+  // componentes reflejen la hora correcta para Europe/Madrid.
+  const isoLocal = `${out.y}-${out.m}-${out.d}T${out.H}:${out.M}:00`;
+  return new Date(isoLocal);
+}
+
+// -------------------------
+// ICS format helpers
 // -------------------------
 function pad(n) { return String(n).padStart(2, "0"); }
 
@@ -111,55 +153,6 @@ function fmtICSDateYYYYMMDD_fromParts(yyyy, MM, dd) {
 function escapeICSText(s) {
   if (!s) return "";
   return String(s).replace(/\r\n/g, '\\n').replace(/\n/g, '\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');
-}
-
-// -------------------------
-// Normalizar team for filename
-// -------------------------
-function normalizeTeamForFilename(raw) {
-  if (!raw) return "equipo";
-  let n = normalize(raw).toLowerCase();
-  n = n.replace(/\d+/g, " ");
-  try {
-    n = n.replace(/[^\p{L}0-9]+/gu, " ");
-  } catch (e) {
-    n = n.replace(/[^a-z0-9áéíóúüñÁÉÍÓÚÜÑ]+/gi, " ");
-  }
-  n = n.replace(/\s+/g, " ").trim();
-  if (n.includes("las flores") || n.includes("c d las flores") || n.includes("cd las flores") || n.includes("c.d. las flores")) {
-    if (n.includes("morado"))   return "las_flores_morado";
-    if (n.includes("amarillo")) return "las_flores_amarillo";
-    if (n.includes("albero"))   return "las_flores_albero";
-    if (n.includes("purpura") || n.includes("púrpura")) return "las_flores_purpura";
-    return "las_flores";
-  }
-  const out = n.replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-  return out || "equipo";
-}
-
-// -------------------------
-// Extraer rango jornada desde HTML
-// -------------------------
-function extractJornadaRangeFromHTML(html) {
-  if (!html) return null;
-  const h = (html || "").replace(/\n/g, " ");
-  let m = h.match(/Jornada\s*\d+\s*<[^>]*>\s*\(?\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*(?:&nbsp;|&ndash;|&mdash;|–|—|-)\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*\)?/i);
-  if (!m) {
-    m = h.match(/Jornada\s*\d+[^<]*?\(?\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*(?:&nbsp;|&ndash;|&mdash;|–|—|-)\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*\)?/i);
-  }
-  if (!m) {
-    const idx = h.search(/Jornada/i);
-    if (idx !== -1) {
-      const snippet = h.slice(idx, idx + 200);
-      const m2 = snippet.match(/([\d]{2}\/[\d]{2}\/[\d]{2,4})\s*(?:&nbsp;|&ndash;|&mdash;|–|—|-)\s*([\d]{2}\/[\d]{2}\/[\d]{2,4})/);
-      if (m2) m = m2;
-    }
-  }
-  if (!m) return null;
-  const start = parseDateDDMMYYYY(m[1]);
-  const end = parseDateDDMMYYYY(m[2]);
-  if (!start || !end) return null;
-  return { start, end };
 }
 
 // -------------------------
@@ -301,6 +294,7 @@ async function parseFederadoInlineCalendar(driver, meta) {
   fs.writeFileSync(path.join(DEBUG_DIR, fname), pageHTML);
   log(`🧩 Snapshot inline guardado: ${fname}`);
 
+  // Extraer rango de jornada del header (si existe)
   const jornadaRange = extractJornadaRangeFromHTML(pageHTML);
   if (jornadaRange) {
     log(`📆 Jornada rango detectado: ${jornadaRange.start.dd}/${jornadaRange.start.MM}/${jornadaRange.start.yyyy} – ${jornadaRange.end.dd}/${jornadaRange.end.MM}/${jornadaRange.end.yyyy}`);
@@ -324,6 +318,7 @@ async function parseFederadoInlineCalendar(driver, meta) {
       const mFecha = fechaTexto.match(/(\d{2}\/\d{2}\/\d{2,4})/);
       const mHora  = fechaTexto.match(/(\d{2}):(\d{2})/);
 
+      // If there's a specific date in the cell we capture it, otherwise leave blank
       const fecha = mFecha ? mFecha[1] : "";
       const hora = mHora ? `${mHora[1]}:${mHora[2]}` : "";
 
@@ -354,9 +349,12 @@ async function parseFederadoInlineCalendar(driver, meta) {
     const tParts = m.hora ? parseTimeHHMM(m.hora) : null;
 
     if (tParts && dParts) {
-      // startKey: instante UTC correspondiente a la fecha+hora (interpretable)
+      // startKey: instante UTC correspondiente a la fecha+hora (construido con UTC)
       const startKey = Date.UTC(parseInt(dParts.yyyy,10), parseInt(dParts.MM,10)-1, parseInt(dParts.dd,10), parseInt(tParts.HH,10), parseInt(tParts.mm,10), 0);
-      const summary = `${m.local} vs ${m.visitante} (Federado)`;
+      // Normalizar nombres para mostrar dentro del evento
+      const displayLocal = normalizeTeamDisplay(m.local);
+      const displayVisit = normalizeTeamDisplay(m.visitante);
+      const summary = `${displayLocal} vs ${displayVisit} (Federado)`;
       const description = "";
       const evt = { type: "timed", startKey, summary, location: m.lugar, description };
       if (!teams.has(teamName)) teams.set(teamName, []);
@@ -365,7 +363,9 @@ async function parseFederadoInlineCalendar(driver, meta) {
     }
 
     if (jornadaRange) {
-      const summary = `${m.local} vs ${m.visitante} (Jornada)`;
+      const displayLocal = normalizeTeamDisplay(m.local);
+      const displayVisit = normalizeTeamDisplay(m.visitante);
+      const summary = `${displayLocal} vs ${displayVisit} (Jornada)`;
       const description = "";
       const evt = {
         type: "allday",
@@ -381,7 +381,9 @@ async function parseFederadoInlineCalendar(driver, meta) {
     }
 
     if (dParts) {
-      const summary = `${m.local} vs ${m.visitante} (Jornada)`;
+      const displayLocal = normalizeTeamDisplay(m.local);
+      const displayVisit = normalizeTeamDisplay(m.visitante);
+      const summary = `${displayLocal} vs ${displayVisit} (Jornada)`;
       const evt = {
         type: "allday",
         startDateParts: dParts,
@@ -397,15 +399,16 @@ async function parseFederadoInlineCalendar(driver, meta) {
 
   const outFiles = [];
   for (const [teamName, events] of teams.entries()) {
+    // ordenar: timed por start, allday quedan al principio (no crítico)
     events.sort((a, b) => {
-      // allday first, then by startKey
       if (a.type === "allday" && b.type !== "allday") return -1;
       if (b.type === "allday" && a.type !== "allday") return 1;
       if (a.type === "timed" && b.type === "timed") return a.startKey - b.startKey;
       return 0;
     });
 
-    const teamSlug = normalizeTeamForFilename(teamName);
+    // Mantener estructura del filename: federado_<categoria>_<teamSlug>.ics
+    const teamSlug = normalizeTeamSlug(teamName); // usa team_name_utils
     const catSlug = slug(meta.category || "general");
     const fnameOut = `federado_${catSlug}_${teamSlug}.ics`;
 
@@ -521,7 +524,9 @@ async function parseFederadoCalendarPage(driver, meta) {
 
     if (tParts && dParts) {
       const startKey = Date.UTC(parseInt(dParts.yyyy,10), parseInt(dParts.MM,10)-1, parseInt(dParts.dd,10), parseInt(tParts.HH,10), parseInt(tParts.mm,10), 0);
-      const summary = `${m.local} vs ${m.visitante} (Federado)`;
+      const displayLocal = normalizeTeamDisplay(m.local);
+      const displayVisit = normalizeTeamDisplay(m.visitante);
+      const summary = `${displayLocal} vs ${displayVisit} (Federado)`;
       const description = m.resultado && m.resultado !== "-" ? `Resultado: ${m.resultado}` : "";
       const evt = { type: "timed", startKey, summary, location: m.lugar || "", description };
       for (const teamName of involved) {
@@ -532,7 +537,9 @@ async function parseFederadoCalendarPage(driver, meta) {
     }
 
     if (jornadaRange) {
-      const summary = `${m.local} vs ${m.visitante} (Jornada)`;
+      const displayLocal = normalizeTeamDisplay(m.local);
+      const displayVisit = normalizeTeamDisplay(m.visitante);
+      const summary = `${displayLocal} vs ${displayVisit} (Jornada)`;
       const description = m.resultado && m.resultado !== "-" ? `Resultado: ${m.resultado}` : "";
       const evt = {
         type: "allday",
@@ -550,7 +557,9 @@ async function parseFederadoCalendarPage(driver, meta) {
     }
 
     if (dParts) {
-      const summary = `${m.local} vs ${m.visitante} (Jornada)`;
+      const displayLocal = normalizeTeamDisplay(m.local);
+      const displayVisit = normalizeTeamDisplay(m.visitante);
+      const summary = `${displayLocal} vs ${displayVisit} (Jornada)`;
       const evt = {
         type: "allday",
         startDateParts: dParts,
@@ -568,6 +577,7 @@ async function parseFederadoCalendarPage(driver, meta) {
 
   const outFiles = [];
   for (const [teamName, events] of teams.entries()) {
+    // ordenar: timed por start, allday quedan al principio (no crítico)
     events.sort((a, b) => {
       if (a.type === "allday" && b.type !== "allday") return -1;
       if (b.type === "allday" && a.type !== "allday") return 1;
@@ -575,7 +585,7 @@ async function parseFederadoCalendarPage(driver, meta) {
       return 0;
     });
 
-    const teamSlug = normalizeTeamForFilename(teamName);
+    const teamSlug = normalizeTeamSlug(teamName);
     const catSlug = slug(meta.category || "general");
     const fname = `federado_${catSlug}_${teamSlug}.ics`;
 
@@ -587,27 +597,41 @@ async function parseFederadoCalendarPage(driver, meta) {
   if (outFiles.length) log(`↪ ${outFiles.join(", ")}`);
 }
 
-// --- MAIN ---
+// -------------------------
+// MAIN
+// -------------------------
 (async () => {
   log("🏐 Iniciando scraping FEDERADO multi-equipos LAS FLORES…");
 
+  const tmpUserDir = fs.mkdtempSync(path.join(os.tmpdir(), "chrome-fed-"));
+  const options = new chrome.Options()
+    .addArguments("--headless=new")
+    .addArguments("--disable-gpu")
+    .addArguments("--no-sandbox")
+    .addArguments("--disable-dev-shm-usage")
+    .addArguments("--lang=es-ES")
+    .addArguments("--window-size=1280,1024")
+    .addArguments("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118 Safari/537.36")
+    .addArguments(`--user-data-dir=${tmpUserDir}`);
+
   let driver;
   try {
-    driver = await setupDriver();
-    log("🚗 Chrome iniciado");
+    driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
 
+    // 1) Torneos
     const tournaments = await discoverTournamentIds(driver);
     if (!tournaments.length) {
       log("⚠️ No hay torneos: revisa el snapshot de la lista y la URL de filtros.");
     }
 
+    // 2) Por torneo → grupos → calendario
     for (const t of tournaments) {
       const category = (normalize(t.category) || normalize(t.label)).toUpperCase();
       log(`\n======= 🏷 Torneo ${t.id} :: ${t.label} (cat: ${category}) =======`);
 
       let groups = [];
       try {
-        groups = await discoverGroupIds(driver, t.id);
+        groups = await discoverGroupIds(driver, t.id); // ["__INLINE__"] o ["3652...", ...]
       } catch (e) {
         onError(e, `discoverGroupIds t=${t.id}`);
         continue;
@@ -639,6 +663,7 @@ async function parseFederadoCalendarPage(driver, meta) {
           onError(e, `parse calendar t=${t.id} g=${g}`);
         }
 
+        // pausa corta entre grupos para no estresar el server
         await driver.sleep(400);
       }
     }
