@@ -102,8 +102,6 @@ function toLocalDate({ yyyy, MM, dd }, timeOrNull) {
   }
 
   // 3) Construir una fecha ISO local (no con zona) y crear Date a partir de ella
-  // Esto produce un Date en la zona horaria del servidor; lo importante es que las
-  // componentes reflejen la hora correcta para Europe/Madrid.
   const isoLocal = `${out.y}-${out.m}-${out.d}T${out.H}:${out.M}:00`;
   return new Date(isoLocal);
 }
@@ -113,7 +111,6 @@ function toLocalDate({ yyyy, MM, dd }, timeOrNull) {
 // -------------------------
 function pad(n) { return String(n).padStart(2, "0"); }
 
-// formatea un instante (millis UTC) a YYYYMMDDTHHMMSS en TZ Europe/Madrid
 function fmtICSDateTimeTZIDFromInstant(instantMillis) {
   const dt = new Date(instantMillis);
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -137,7 +134,6 @@ function fmtICSDateTimeTZIDFromInstant(instantMillis) {
   return `${y}${mo}${d}T${H}${M}${S}`;
 }
 
-// añade días a un objeto {yyyy,MM,dd} devolviendo mismo formato (UTC-safe)
 function addDaysToDateParts({ yyyy, MM, dd }, days) {
   const d = new Date(Date.UTC(parseInt(yyyy,10), parseInt(MM,10)-1, parseInt(dd,10)));
   d.setUTCDate(d.getUTCDate() + days);
@@ -156,10 +152,7 @@ function escapeICSText(s) {
 }
 
 // -------------------------
-// writeICS: ahora soporta:
-// - eventos timed con formato DTSTART;TZID=Europe/Madrid:YYYYMMDDTHHMMSS (sin Z)
-//   usando instant UTC -> Intl -> componentes Madrid
-// - eventos allday con DTEND = end+1
+// writeICS: ahora soporta timed y allday
 // -------------------------
 function writeICS(filename, events) {
   let ics = `BEGIN:VCALENDAR
@@ -170,7 +163,6 @@ PRODID:-//Las Flores//Calendarios Federado//ES
 `;
   for (const evt of events) {
     if (evt.type === "timed") {
-      // evt.startKey es millis UTC del instante (construido a partir de partes)
       const dtStr = fmtICSDateTimeTZIDFromInstant(evt.startKey);
       ics += `BEGIN:VEVENT
 SUMMARY:${escapeICSText(evt.summary)}
@@ -208,7 +200,6 @@ async function discoverTournamentIds(driver) {
   const html0 = await driver.getPageSource();
   const listSnap = path.join(DEBUG_DIR, `fed_list_debug_${RUN_STAMP}.html`);
   fs.writeFileSync(listSnap, html0);
-  log(`📄 Snapshot lista guardado en: ${listSnap}`);
 
   try {
     await driver.wait(until.elementLocated(By.css("table.tabletype-public tbody")), 15000);
@@ -266,18 +257,15 @@ async function discoverGroupIds(driver, tournamentId) {
       if (value) groups.push(value);
     }
     if (groups.length) {
-      log(`📌 Grupos detectados: ${groups.map(g => `→ ${g}`).join(" | ")}`);
       return groups;
     }
   }
 
   const inlineRows = await driver.findElements(By.css("#custom-domain-calendar-widget table.tablestyle-e1d9 tbody tr"));
   if (inlineRows.length > 0) {
-    log("📌 Calendario inline detectado (sin grupos).");
     return ["__INLINE__"];
   }
 
-  log(`⚠️ No se encontraron grupos ni calendario inline en torneo ${tournamentId}`);
   try {
     const html = await driver.getPageSource();
     fs.writeFileSync(path.join(DEBUG_DIR, `fed_groups_empty_${tournamentId}.html`), html);
@@ -292,13 +280,8 @@ async function parseFederadoInlineCalendar(driver, meta) {
   const pageHTML = await driver.getPageSource();
   const fname = `fed_inline_${meta.tournamentId}.html`;
   fs.writeFileSync(path.join(DEBUG_DIR, fname), pageHTML);
-  log(`🧩 Snapshot inline guardado: ${fname}`);
 
-  // Extraer rango de jornada del header (si existe)
   const jornadaRange = extractJornadaRangeFromHTML(pageHTML);
-  if (jornadaRange) {
-    log(`📆 Jornada rango detectado: ${jornadaRange.start.dd}/${jornadaRange.start.MM}/${jornadaRange.start.yyyy} – ${jornadaRange.end.dd}/${jornadaRange.end.MM}/${jornadaRange.end.yyyy}`);
-  }
 
   const rows = await driver.findElements(By.css("#custom-domain-calendar-widget table.tablestyle-e1d9 tbody tr"));
   const matches = [];
@@ -318,7 +301,6 @@ async function parseFederadoInlineCalendar(driver, meta) {
       const mFecha = fechaTexto.match(/(\d{2}\/\d{2}\/\d{2,4})/);
       const mHora  = fechaTexto.match(/(\d{2}):(\d{2})/);
 
-      // If there's a specific date in the cell we capture it, otherwise leave blank
       const fecha = mFecha ? mFecha[1] : "";
       const hora = mHora ? `${mHora[1]}:${mHora[2]}` : "";
 
@@ -330,10 +312,6 @@ async function parseFederadoInlineCalendar(driver, meta) {
 
       matches.push({ fecha, hora, local, visitante, lugar, resultado: "" });
     } catch {}
-  }
-
-  if (!matches.length) {
-    log("⚠️ No se detectaron filas en el calendario inline. Revisa el snapshot.");
   }
 
   const teams = new Map();
@@ -349,14 +327,11 @@ async function parseFederadoInlineCalendar(driver, meta) {
     const tParts = m.hora ? parseTimeHHMM(m.hora) : null;
 
     if (tParts && dParts) {
-      // startKey: instante UTC correspondiente a la fecha+hora (construido con UTC)
       const startKey = Date.UTC(parseInt(dParts.yyyy,10), parseInt(dParts.MM,10)-1, parseInt(dParts.dd,10), parseInt(tParts.HH,10), parseInt(tParts.mm,10), 0);
-      // Normalizar nombres para mostrar dentro del evento
       const displayLocal = normalizeTeamDisplay(m.local);
       const displayVisit = normalizeTeamDisplay(m.visitante);
       const summary = `${displayLocal} vs ${displayVisit} (Federado)`;
-      const description = "";
-      const evt = { type: "timed", startKey, summary, location: m.lugar, description };
+      const evt = { type: "timed", startKey, summary, location: m.lugar, description: "" };
       if (!teams.has(teamName)) teams.set(teamName, []);
       teams.get(teamName).push(evt);
       continue;
@@ -366,14 +341,13 @@ async function parseFederadoInlineCalendar(driver, meta) {
       const displayLocal = normalizeTeamDisplay(m.local);
       const displayVisit = normalizeTeamDisplay(m.visitante);
       const summary = `${displayLocal} vs ${displayVisit} (Jornada)`;
-      const description = "";
       const evt = {
         type: "allday",
         startDateParts: jornadaRange.start,
         endDateParts: jornadaRange.end,
         summary,
         location: m.lugar || "",
-        description
+        description: ""
       };
       if (!teams.has(teamName)) teams.set(teamName, []);
       teams.get(teamName).push(evt);
@@ -399,36 +373,6 @@ async function parseFederadoInlineCalendar(driver, meta) {
 
   const outFiles = [];
   for (const [teamName, events] of teams.entries()) {
-
-  // --- DEBUG EXTRA ---------------------------------------------------
-  const displayName = normalizeTeamDisplay(teamName);
-  const teamSlug = normalizeTeamSlug(teamName);
-  const catSlug = slug(meta.category || "general");
-  const fnameOut = `federado_${catSlug}_${teamSlug}.ics`;
-
-  // Guardamos este info en un fichero JSON para inspección global
-  try {
-    const debugPath = path.join(DEBUG_DIR, `fed_last_teams.json`);
-    const prev = fs.existsSync(debugPath) ? JSON.parse(fs.readFileSync(debugPath,"utf8")) : [];
-    prev.push({ raw: teamName, displayName, slug: teamSlug, file: fnameOut });
-    fs.writeFileSync(debugPath, JSON.stringify(prev,null,2));
-  } catch(e){}
-
-  // Un log por consola antes de escribir el ICS
-  log(`📝 Generando ICS → ${fnameOut}
-     • Equipo RAW:        "${teamName}"
-     • Equipo mostrado:   "${displayName}"
-     • Slug archivo:      "${teamSlug}"
-     • Eventos:           ${events.length}`);
-  if (events.length) {
-    log(`     • Primer evento: "${events[0].summary}"`);
-  }
-  // -------------------------------------------------------------------
-
-  writeICS(fnameOut, events);
-  outFiles.push(fnameOut);
-}
-    // ordenar: timed por start, allday quedan al principio (no crítico)
     events.sort((a, b) => {
       if (a.type === "allday" && b.type !== "allday") return -1;
       if (b.type === "allday" && a.type !== "allday") return 1;
@@ -436,8 +380,7 @@ async function parseFederadoInlineCalendar(driver, meta) {
       return 0;
     });
 
-    // Mantener estructura del filename: federado_<categoria>_<teamSlug>.ics
-    const teamSlug = normalizeTeamSlug(teamName); // usa team_name_utils
+    const teamSlug = normalizeTeamSlug(teamName);
     const catSlug = slug(meta.category || "general");
     const fnameOut = `federado_${catSlug}_${teamSlug}.ics`;
 
@@ -448,260 +391,3 @@ async function parseFederadoInlineCalendar(driver, meta) {
   log(`📦 Generados ${outFiles.length} calendarios inline para torneo=${meta.tournamentId}`);
   if (outFiles.length) log(`↪ ${outFiles.join(", ")}`);
 }
-
-// -------------------------
-// parseFederadoCalendarPage
-// -------------------------
-async function parseFederadoCalendarPage(driver, meta) {
-  const url = `https://favoley.es/es/tournament/${meta.tournamentId}/calendar/${meta.groupId}/all`;
-  log(`➡️ Abriendo calendario: ${url}`);
-  await driver.get(url);
-
-  try {
-    await driver.wait(until.elementLocated(By.css("table, .table, tbody, .row")), 15000);
-  } catch (e) {}
-
-  const pageHTML = await driver.getPageSource();
-  const snapName = `fed_${meta.tournamentId}_${meta.groupId}.html`;
-  fs.writeFileSync(path.join(DEBUG_DIR, snapName), pageHTML);
-  log(`🧩 Snapshot guardado: ${snapName}`);
-
-  try {
-    parseFederadoHTML(pageHTML, meta);
-  } catch (err) {
-    log(`⚠️ Error al parsear calendario t=${meta.tournamentId} g=${meta.groupId}: ${err}`);
-  }
-
-  const jornadaRange = extractJornadaRangeFromHTML(pageHTML);
-  if (jornadaRange) {
-    log(`📆 Jornada rango detectado: ${jornadaRange.start.dd}/${jornadaRange.start.MM}/${jornadaRange.start.yyyy} – ${jornadaRange.end.dd}/${jornadaRange.end.MM}/${jornadaRange.end.yyyy}`);
-  }
-
-  let rows = [];
-  try { rows = await driver.findElements(By.css("table tbody tr")); } catch {}
-  if (!rows.length) {
-    try { rows = await driver.findElements(By.css("tr, .table-row")); } catch {}
-  }
-
-  const matches = [];
-
-  if (rows.length) {
-    for (const r of rows) {
-      try {
-        const tds = await r.findElements(By.css("td"));
-        if (tds.length >= 4) {
-          const fecha = (await tds[0].getText()).trim();
-          const horaRaw = (await tds[1].getText()).trim();
-          const hora = (horaRaw.match(/\d{2}:\d{2}/) || [])[0] || "";
-          const local = (await tds[2].getText()).trim();
-          const visitante = (await tds[3].getText()).trim();
-          const resultado = tds[4] ? (await tds[4].getText()).trim() : "";
-          const lugar = tds[5] ? (await tds[5].getText()).trim() : "";
-
-          if (fecha && local && visitante) {
-            matches.push({ fecha, hora, local, visitante, lugar, resultado });
-          } else if (local && visitante) {
-            matches.push({ fecha: "", hora: "", local, visitante, lugar, resultado });
-          }
-        }
-      } catch {}
-    }
-  }
-
-  if (!matches.length) {
-    const text = normalize(pageHTML);
-    const dateRegex = /(\d{2}\/\d{2}\/\d{2,4})/g;
-    let m;
-    while ((m = dateRegex.exec(text)) !== null) {
-      const fecha = m[1];
-      const start = Math.max(0, m.index - 200);
-      const end   = Math.min(text.length, m.index + 200);
-      const chunk = text.slice(start, end);
-
-      const horaM = chunk.match(/(\d{2}):(\d{2})/);
-      const hora = horaM ? `${horaM[1]}:${horaM[2]}` : "";
-
-      let local = "", visitante = "";
-      const vsM = chunk.match(/([A-Z0-9\.\-\sÁÉÍÓÚÜÑ/]+?)\s+(?:VS|vs|-\s|—\s|–\s)\s+([A-Z0-9\.\-\sÁÉÍÓÚÜÑ/]+?)(?:\s|$)/);
-      if (vsM) {
-        local = normalize(vsM[1]);
-        visitante = normalize(vsM[2]);
-      }
-
-      if (fecha && local && visitante) {
-        matches.push({ fecha, hora, local, visitante, lugar: "", resultado: "" });
-      }
-    }
-  }
-
-  if (!matches.length) {
-    log(`⚠️ t=${meta.tournamentId} g=${meta.groupId}: sin filas detectadas; revisa snapshot.`);
-  }
-
-  const teams = new Map();
-  for (const m of matches) {
-    const localN = normLower(m.local);
-    const visitN = normLower(m.visitante);
-    if (!localN.includes(TEAM_NEEDLE) && !visitN.includes(TEAM_NEEDLE)) continue;
-
-    const involved = [];
-    if (localN.includes(TEAM_NEEDLE)) involved.push(m.local);
-    if (visitN.includes(TEAM_NEEDLE)) involved.push(m.visitante);
-
-    const dParts = m.fecha ? parseDateDDMMYYYY(m.fecha) : null;
-    const tParts = m.hora ? parseTimeHHMM(m.hora) : null;
-
-    if (tParts && dParts) {
-      const startKey = Date.UTC(parseInt(dParts.yyyy,10), parseInt(dParts.MM,10)-1, parseInt(dParts.dd,10), parseInt(tParts.HH,10), parseInt(tParts.mm,10), 0);
-      const displayLocal = normalizeTeamDisplay(m.local);
-      const displayVisit = normalizeTeamDisplay(m.visitante);
-      const summary = `${displayLocal} vs ${displayVisit} (Federado)`;
-      const description = m.resultado && m.resultado !== "-" ? `Resultado: ${m.resultado}` : "";
-      const evt = { type: "timed", startKey, summary, location: m.lugar || "", description };
-      for (const teamName of involved) {
-        if (!teams.has(teamName)) teams.set(teamName, []);
-        teams.get(teamName).push(evt);
-      }
-      continue;
-    }
-
-    if (jornadaRange) {
-      const displayLocal = normalizeTeamDisplay(m.local);
-      const displayVisit = normalizeTeamDisplay(m.visitante);
-      const summary = `${displayLocal} vs ${displayVisit} (Jornada)`;
-      const description = m.resultado && m.resultado !== "-" ? `Resultado: ${m.resultado}` : "";
-      const evt = {
-        type: "allday",
-        startDateParts: jornadaRange.start,
-        endDateParts: jornadaRange.end,
-        summary,
-        location: m.lugar || "",
-        description
-      };
-      for (const teamName of involved) {
-        if (!teams.has(teamName)) teams.set(teamName, []);
-        teams.get(teamName).push(evt);
-      }
-      continue;
-    }
-
-    if (dParts) {
-      const displayLocal = normalizeTeamDisplay(m.local);
-      const displayVisit = normalizeTeamDisplay(m.visitante);
-      const summary = `${displayLocal} vs ${displayVisit} (Jornada)`;
-      const evt = {
-        type: "allday",
-        startDateParts: dParts,
-        endDateParts: dParts,
-        summary,
-        location: m.lugar || "",
-        description: m.resultado && m.resultado !== "-" ? `Resultado: ${m.resultado}` : ""
-      };
-      for (const teamName of involved) {
-        if (!teams.has(teamName)) teams.set(teamName, []);
-        teams.get(teamName).push(evt);
-      }
-    }
-  }
-
-  const outFiles = [];
-  for (const [teamName, events] of teams.entries()) {
-    // ordenar: timed por start, allday quedan al principio (no crítico)
-    events.sort((a, b) => {
-      if (a.type === "allday" && b.type !== "allday") return -1;
-      if (b.type === "allday" && a.type !== "allday") return 1;
-      if (a.type === "timed" && b.type === "timed") return a.startKey - b.startKey;
-      return 0;
-    });
-
-    const teamSlug = normalizeTeamSlug(teamName);
-    const catSlug = slug(meta.category || "general");
-    const fname = `federado_${catSlug}_${teamSlug}.ics`;
-
-    writeICS(fname, events);
-    outFiles.push(fname);
-  }
-
-  log(`📦 Generados ${outFiles.length} calendarios en t=${meta.tournamentId} g=${meta.groupId}`);
-  if (outFiles.length) log(`↪ ${outFiles.join(", ")}`);
-}
-
-// -------------------------
-// MAIN
-// -------------------------
-(async () => {
-  log("🏐 Iniciando scraping FEDERADO multi-equipos LAS FLORES…");
-
-  const tmpUserDir = fs.mkdtempSync(path.join(os.tmpdir(), "chrome-fed-"));
-  const options = new chrome.Options()
-    .addArguments("--headless=new")
-    .addArguments("--disable-gpu")
-    .addArguments("--no-sandbox")
-    .addArguments("--disable-dev-shm-usage")
-    .addArguments("--lang=es-ES")
-    .addArguments("--window-size=1280,1024")
-    .addArguments("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118 Safari/537.36")
-    .addArguments(`--user-data-dir=${tmpUserDir}`);
-
-  let driver;
-  try {
-    driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
-
-    // 1) Torneos
-    const tournaments = await discoverTournamentIds(driver);
-    if (!tournaments.length) {
-      log("⚠️ No hay torneos: revisa el snapshot de la lista y la URL de filtros.");
-    }
-
-    // 2) Por torneo → grupos → calendario
-    for (const t of tournaments) {
-      const category = (normalize(t.category) || normalize(t.label)).toUpperCase();
-      log(`\n======= 🏷 Torneo ${t.id} :: ${t.label} (cat: ${category}) =======`);
-
-      let groups = [];
-      try {
-        groups = await discoverGroupIds(driver, t.id); // ["__INLINE__"] o ["3652...", ...]
-      } catch (e) {
-        onError(e, `discoverGroupIds t=${t.id}`);
-        continue;
-      }
-
-      log(`🔹 Grupos detectados: ${groups.length}${groups.length ? " → ["+groups.join(", ")+"]" : ""}`);
-
-      for (const g of groups) {
-        if (g === "__INLINE__") {
-          try {
-            await parseFederadoInlineCalendar(driver, {
-              tournamentId: t.id,
-              groupId: "inline",
-              category
-            });
-          } catch (e) {
-            onError(e, `parse inline calendar t=${t.id}`);
-          }
-          continue;
-        }
-
-        try {
-          await parseFederadoCalendarPage(driver, {
-            tournamentId: t.id,
-            groupId: g,
-            category
-          });
-        } catch (e) {
-          onError(e, `parse calendar t=${t.id} g=${g}`);
-        }
-
-        // pausa corta entre grupos para no estresar el server
-        await driver.sleep(400);
-      }
-    }
-
-    log("\n✅ Scraping federado multi-equipos completado.");
-  } catch (err) {
-    onError(err, "MAIN");
-  } finally {
-    try { if (driver) await driver.quit(); } catch {}
-    log("🧹 Chrome cerrado");
-  }
-})();
