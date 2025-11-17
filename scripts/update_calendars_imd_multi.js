@@ -130,9 +130,24 @@ END:VEVENT
     // -------------------------------
     // Buscar equipos LAS FLORES
     // -------------------------------
-    const searchInput = await driver.findElement(By.css("#busqueda"));
-    await searchInput.sendKeys("flores");
-    await driver.findElement(By.css("button")).click();
+    // --- Mejor búsqueda (más robusta) ---
+try {
+  const searchInput = await driver.wait(until.elementLocated(By.css("#busqueda")), 10000);
+  await driver.wait(until.elementIsVisible(searchInput), 5000);
+  await searchInput.clear();
+  await searchInput.sendKeys("flores");
+  // intentar click normal sobre el botón conocido
+  try {
+    const btn = await driver.findElement(By.id("btnbusqueda"));
+    await btn.click();
+  } catch (eBtn) {
+    // fallback: intentar ejecutar click vía JS
+    await driver.executeScript(`(function(){ const b=document.querySelector('#btnbusqueda') || document.querySelector('button'); if(b){ b.click(); return true;} return false; })()`);
+  }
+} catch (err) {
+  log("❌ No se pudo iniciar búsqueda en IMD: " + err);
+}
+
 
     await driver.wait(until.elementLocated(By.css("#resultado_equipos tbody tr")), 10000);
 
@@ -163,11 +178,31 @@ END:VEVENT
     for (const team of teamsFound) {
       log(`\n➡️ Procesando ${team.name} (${team.category})...`);
 
-      await driver.findElement(By.css("#busqueda")).clear();
-      await driver.findElement(By.css("#busqueda")).sendKeys(team.name);
-      await driver.findElement(By.css("button")).click();
+      try {
+  const input = await driver.findElement(By.css("#busqueda"));
+  await input.clear();
+  await input.sendKeys(team.name);
+  try {
+    const btn2 = await driver.findElement(By.id("btnbusqueda"));
+    await btn2.click();
+  } catch (e2) {
+    await driver.executeScript(`(function(){ const b=document.querySelector('#btnbusqueda') || document.querySelector('button'); if(b){ b.click(); return true;} return false; })()`);
+  }
+} catch (err) {
+  log("❌ Error al buscar equipo en IMD: " + err);
+}
 
-      await driver.wait(until.elementLocated(By.css(".tab-content table")), 10000);
+
+      await driver.wait(until.elementLocated(By.css(".tab-content table")), 25000);
+
+      const rows = await driver.findElements(By.css("#resultado_equipos tbody tr"));
+if (!rows.length) {
+  try {
+    const h = await driver.getPageSource();
+    fs.writeFileSync(path.join(DEBUG_DIR, `imd_search_empty_${RUN_STAMP}.html`), h);
+    log("⚠️ Resultado búsqueda IMD: 0 filas — snapshot guardado.");
+  } catch {}
+}
 
       const tables = await driver.findElements(By.css(".tab-content table"));
       log(`📑 ${tables.length} tablas detectadas para ${team.name}`);
