@@ -1,20 +1,15 @@
 // scripts/update_calendars_imd_multi.js
-// Genera calendarios IMD para todos los equipos LAS FLORES.
-// Usa normalización de nombres común (EVB / colores) con team_name_utils.js
-// y crea debug adicional seguro.
+// Scraper IMD multi-equipos → genera 1 ICS por cada equipo LAS FLORES y EVB LAS FLORES.
 
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { Builder, By, Key, until } = require("selenium-webdriver");
+const { Builder, By, until } = require("selenium-webdriver");
 const chrome = require("selenium-webdriver/chrome");
-const { execSync } = require("child_process");
 
-// 🔥 NUEVO: normalizador de nombres unificado
-const { normalizeTeamDisplay } = require("./team_name_utils");
+// Normalización avanzada (EVB / color / limpieza)
+const { normalizeTeamDisplay, normalizeTeamSlug } = require("./team_name_utils");
 
-const IMD_URL = "https://imd.sevilla.org/app/jjddmm_resultados/";
-const SEARCH_TERM = "las flores";
 const OUTPUT_DIR = path.join("calendarios");
 const DEBUG_DIR = path.join(OUTPUT_DIR, "debug");
 const LOG_DIR = path.join(OUTPUT_DIR, "logs");
@@ -24,48 +19,56 @@ fs.mkdirSync(DEBUG_DIR, { recursive: true });
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
 const RUN_STAMP = new Date().toISOString().replace(/[:.]/g, "-");
-const LOG_FILE = path.join(LOG_DIR, `imd_multi_${RUN_STAMP}.log`);
-const ICS_TZID = "Europe/Madrid";
+const LOG_FILE = path.join(LOG_DIR, `imd_${RUN_STAMP}.log`);
 
+const TEAM_NEEDLE = "las flores";
+
+// ---------------------------
+// Utils
+// ---------------------------
 function log(msg) {
   console.log(msg);
-  fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`);
+  try { fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`); } catch {}
 }
 
 function normalize(s) {
   return (s || "")
+    .toString()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-// --------------------
-// ICS Helpers
-// --------------------
-function fmtICSDateTimeTZID(dt) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return (
-    `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}` +
-    `T${pad(dt.getHours())}${pad(dt.getMinutes())}00`
-  );
+function parseDate(s) {
+  const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return null;
+  return { dd: m[1], MM: m[2], yyyy: m[3] };
 }
 
-function fmtICSDate(d) {
-  const Y = d.getUTCFullYear();
-  const M = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const D = String(d.getUTCDate()).padStart(2, "0");
-  return `${Y}${M}${D}`;
+function parseTime(s) {
+  const m = s.match(/(\d{2}):(\d{2})/);
+  if (!m) return null;
+  return { HH: m[1], mm: m[2] };
 }
 
-function writeICS(teamName, category, events) {
-  // No cambiamos la estructura de nombres de archivo
-  const safeName = `${category}_${teamName}`
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_");
+function fmtICSDateTime(dParts, tParts) {
+  return `${dParts.yyyy}${dParts.MM}${dParts.dd}T${tParts.HH}${tParts.mm}00`;
+}
 
-  const filename = `imd_${safeName}.ics`;
+function fmtDate(d) {
+  return `${d.yyyy}${d.MM}${d.dd}`;
+}
 
+function isLasFloresTeam(name) {
+  return (name || "").toUpperCase().includes("LAS FLORES");
+}
+
+// ---------------------------
+// writeICS
+// ---------------------------
+function writeICS(fileName, events) {
   let ics = `BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
@@ -78,216 +81,187 @@ PRODID:-//Las Flores//Calendarios IMD//ES
       ics += `BEGIN:VEVENT
 SUMMARY:${evt.summary}
 LOCATION:${evt.location}
-DTSTART;TZID=${ICS_TZID}:${fmtICSDateTimeTZID(evt.start)}
-DESCRIPTION:${evt.description || ""}
+DTSTART:${evt.start}
+DESCRIPTION:${evt.description}
 END:VEVENT
 `;
     } else {
       ics += `BEGIN:VEVENT
 SUMMARY:${evt.summary}
 LOCATION:${evt.location}
-DTSTART;VALUE=DATE:${fmtICSDate(evt.start)}
-DTEND;VALUE=DATE:${fmtICSDate(evt.end)}
-DESCRIPTION:${evt.description || ""}
+DTSTART;VALUE=DATE:${evt.start}
+DTEND;VALUE=DATE:${evt.end}
+DESCRIPTION:${evt.description}
 END:VEVENT
 `;
     }
   }
 
-  ics += "END:VCALENDAR\n";
+  ics += `END:VCALENDAR\n`;
 
-  fs.writeFileSync(path.join(OUTPUT_DIR, filename), ics);
-  log(`✅ ${filename} (${events.length} eventos)`);
+  fs.writeFileSync(path.join(OUTPUT_DIR, fileName), ics);
+  log(`✅ ${fileName} (${events.length} eventos)`);
 }
 
-// --------------------
-// Scraping Helpers
-// --------------------
-async function parseTeamCalendar(driver, teamNameRaw) {
-  const TEAM_EXACT = teamNameRaw.trim().toUpperCase();
-  const allEvents = [];
-
-  // Normalizamos el nombre para mostrar, como en Federado
-  const teamDisplayName = normalizeTeamDisplay(teamNameRaw);
-
-  // Debug global
-  const debugTeamsPath = path.join(DEBUG_DIR, `imd_last_teams.json`);
-  let debugList = [];
-  try {
-    if (fs.existsSync(debugTeamsPath)) {
-      debugList = JSON.parse(fs.readFileSync(debugTeamsPath, "utf8"));
-    }
-  } catch {}
-
-  debugList.push({
-    raw: teamNameRaw,
-    display: teamDisplayName,
-    categoryUsed: TEAM_EXACT
-  });
-
-  fs.writeFileSync(debugTeamsPath, JSON.stringify(debugList, null, 2));
-
-  const container = await driver.findElement(By.id("tab1"));
-  const tables = await container.findElements(By.css("table.tt"));
-  log(`📑 ${tables.length} tablas detectadas para ${teamNameRaw}`);
-
-  for (const table of tables) {
-    const rows = await table.findElements(By.css("tbody > tr"));
-    if (rows.length <= 2) continue;
-
-    for (let i = 2; i < rows.length; i++) {
-      const cols = await rows[i].findElements(By.css("td"));
-      if (cols.length < 8) continue;
-
-      const vals = await Promise.all(cols.map((c) => c.getText().then((t) => t.trim())));
-      const [fecha, hora, local, visitante, resultado, lugar, obsEncuentro, obsResultado] = vals;
-
-      const involves =
-        local.toUpperCase().includes(TEAM_EXACT) ||
-        visitante.toUpperCase().includes(TEAM_EXACT);
-
-      if (!involves) continue;
-
-      const match = fecha.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-      if (!match) continue;
-
-      const [_, dd, MM, yyyy] = match;
-      const time = hora.match(/(\d{2}):(\d{2})/);
-
-      const start = new Date(
-        `${yyyy}-${MM}-${dd}T${time ? time[0] : "00:00"}:00`
-      );
-
-      const localDisplay = normalizeTeamDisplay(local);
-      const visitanteDisplay = normalizeTeamDisplay(visitante);
-
-      const summary = `${localDisplay} vs ${visitanteDisplay} (IMD)`;
-
-      const descriptionParts = [];
-      if (resultado && resultado !== "-")
-        descriptionParts.push(`Resultado: ${resultado}`);
-      if (obsEncuentro && obsEncuentro !== "-")
-        descriptionParts.push(`Obs. Encuentro: ${obsEncuentro}`);
-      if (obsResultado && obsResultado !== "-")
-        descriptionParts.push(`Obs. Resultado: ${obsResultado}`);
-
-      const description = descriptionParts.join(" | ");
-
-      const evt =
-        time
-          ? {
-              type: "timed",
-              summary,
-              location: lugar || "Por confirmar",
-              start,
-              description,
-            }
-          : {
-              type: "allday",
-              summary,
-              location: lugar || "Por confirmar",
-              start,
-              end: new Date(start.getTime() + 86400000),
-              description,
-            };
-
-      // 🔥 Debug por evento
-      log(`📝 Evento IMD → ${summary}`);
-
-      allEvents.push(evt);
-    }
-  }
-
-  return allEvents;
-}
-
-// --------------------
-// MAIN SCRIPT
-// --------------------
+// ---------------------------
+// MAIN
+// ---------------------------
 (async () => {
   log("🌼 Iniciando generación de calendarios IMD para equipos LAS FLORES...");
 
-  const tmpUserDir = fs.mkdtempSync(path.join(os.tmpdir(), "chrome-imd-"));
   const options = new chrome.Options()
-    .addArguments(
-      "--headless=new",
-      "--disable-gpu",
-      "--no-sandbox",
-      "--disable-dev-shm-usage",
-      `--user-data-dir=${tmpUserDir}`
-    );
+    .addArguments("--headless=new")
+    .addArguments("--disable-gpu")
+    .addArguments("--no-sandbox")
+    .addArguments("--disable-dev-shm-usage")
+    .addArguments("--lang=es-ES");
 
-  const driver = await new Builder()
-    .forBrowser("chrome")
-    .setChromeOptions(options)
-    .build();
+  let driver = null;
 
   try {
-    await driver.get(IMD_URL);
-    log(`🌐 Página abierta: ${IMD_URL}`);
+    driver = await new Builder()
+      .forBrowser("chrome")
+      .setChromeOptions(options)
+      .build();
 
-    const input = await driver.wait(until.elementLocated(By.id("busqueda")), 15000);
-    await driver.wait(until.elementIsVisible(input), 5000);
+    await driver.get("https://imd.sevilla.org/app/jjddmm_resultados/");
+    log("🌐 Página abierta: https://imd.sevilla.org/app/jjddmm_resultados/");
 
-    await input.clear();
-    await input.sendKeys(SEARCH_TERM, Key.ENTER);
-    log(`🔎 Buscando '${SEARCH_TERM}'...`);
-    await driver.sleep(2000);
+    // -------------------------------
+    // Buscar equipos LAS FLORES
+    // -------------------------------
+    const searchInput = await driver.findElement(By.css("#busqueda"));
+    await searchInput.sendKeys("flores");
+    await driver.findElement(By.css("button")).click();
 
-    await driver.wait(
-      until.elementLocated(
-        By.xpath("//table[contains(@class,'tt')]//td[contains(.,'Nº.Equipos')]")
-      ),
-      20000
-    );
+    await driver.wait(until.elementLocated(By.css("#resultado_equipos tbody tr")), 10000);
 
-    const tab1 = await driver.findElement(By.id("tab1"));
-    const table = await tab1.findElement(By.css("table.tt"));
-    const rows = await table.findElements(By.css("tbody > tr"));
+    const rows = await driver.findElements(By.css("#resultado_equipos tbody tr"));
     log(`📋 ${rows.length} filas encontradas en tabla de equipos.`);
 
-    const equipos = [];
+    const teamsFound = [];
 
-    for (const row of rows) {
-      const cols = await row.findElements(By.css("td"));
-      if (cols.length < 3) continue;
+    for (const r of rows) {
+      try {
+        const tds = await r.findElements(By.css("td"));
+        if (tds.length < 3) continue;
 
-      const nombre = (await cols[0].getText()).trim().toUpperCase();
-      const categoria = (await cols[2].getText()).trim().toUpperCase();
+        const name = (await tds[0].getText()).trim();
+        const category = (await tds[2].getText()).trim();
 
-      if (nombre.includes("LAS FLORES")) {
-        const rowHtml = await row.getAttribute("outerHTML");
-        const match = rowHtml.match(/datosequipo\('([A-F0-9-]+)'\)/i);
-        if (match) equipos.push({ id: match[1], nombre, categoria });
+        if (name.toUpperCase().includes("LAS FLORES")) {
+          teamsFound.push({ name, category });
+        }
+      } catch {}
+    }
+
+    log(`🌸 ${teamsFound.length} equipos LAS FLORES detectados.`);
+
+    // -------------------------------
+    // Procesar cada equipo
+    // -------------------------------
+    for (const team of teamsFound) {
+      log(`\n➡️ Procesando ${team.name} (${team.category})...`);
+
+      await driver.findElement(By.css("#busqueda")).clear();
+      await driver.findElement(By.css("#busqueda")).sendKeys(team.name);
+      await driver.findElement(By.css("button")).click();
+
+      await driver.wait(until.elementLocated(By.css(".tab-content table")), 10000);
+
+      const tables = await driver.findElements(By.css(".tab-content table"));
+      log(`📑 ${tables.length} tablas detectadas para ${team.name}`);
+
+      const events = [];
+
+      for (const table of tables) {
+        const trs = await table.findElements(By.css("tbody tr"));
+
+        for (const tr of trs) {
+          try {
+            const tds = await tr.findElements(By.css("td"));
+            if (tds.length < 4) continue;
+
+            const fechaRaw = await tds[0].getText();
+            const horaRaw = await tds[1].getText();
+            const local = (await tds[2].getText()).trim();
+            const visitante = (await tds[3].getText()).trim();
+
+            const fecha = fechaRaw.trim();
+            const hora = horaRaw.trim();
+
+            const dParts = parseDate(fecha);
+            const tParts = parseTime(hora);
+
+            // MOSTRAR EQUIPOS → aplicar normalización SOLO si es del club
+            const displayLocal = isLasFloresTeam(local)
+              ? normalizeTeamDisplay(local)
+              : local;
+
+            const displayVisit = isLasFloresTeam(visitante)
+              ? normalizeTeamDisplay(visitante)
+              : visitante;
+
+            const summary = `${displayLocal} vs ${displayVisit} (IMD)`;
+
+            if (dParts && tParts) {
+              events.push({
+                type: "timed",
+                summary,
+                location: "",
+                description: "",
+                start: fmtICSDateTime(dParts, tParts)
+              });
+            } else if (dParts) {
+              const start = fmtDate(dParts);
+              const end = start;
+              events.push({
+                type: "allday",
+                summary,
+                location: "",
+                description: "",
+                start,
+                end
+              });
+            }
+          } catch {}
+        }
       }
+
+      // -------------------------------
+      // Ordenar eventos
+      // -------------------------------
+      events.sort((a, b) => {
+        if (a.type === "allday" && b.type !== "allday") return -1;
+        if (b.type === "allday" && a.type !== "allday") return 1;
+        return a.start.localeCompare(b.start);
+      });
+
+      const teamSlug = normalizeTeamSlug(team.name);
+      const catSlug = team.category
+        .toLowerCase()
+        .replace(/\s+/g, "_")
+        .replace(/[^\w_]/g, "");
+
+      const filename = `imd_${catSlug}_${teamSlug}.ics`;
+
+      writeICS(filename, events);
+
+      log(`✅ ${team.name} (${team.category}): ${events.length} partidos.`);
     }
 
-    log(`🌸 ${equipos.length} equipos LAS FLORES detectados.`);
-
-    for (const { id, nombre, categoria } of equipos) {
-      log(`\n➡️ Procesando ${nombre} (${categoria})...`);
-
-      await driver.executeScript(`datosequipo("${id}")`);
-
-      const selJor = await driver.wait(until.elementLocated(By.id("seljor")), 15000);
-      await driver.wait(until.elementIsVisible(selJor), 10000);
-      await selJor.sendKeys("Todas");
-      await driver.sleep(2000);
-
-      const events = await parseTeamCalendar(driver, nombre);
-      writeICS(nombre, categoria, events);
-      log(`✅ ${nombre} (${categoria}): ${events.length} partidos.`);
-    }
-
-    // 🧩 Generar automáticamente el index.html
-    log("\n🧱 Generando index.html automáticamente...");
-    execSync("node scripts/generate_index_html.js", { stdio: "inherit" });
-    log("✅ index.html actualizado correctamente.");
+    // -------------------------------
+    // FIN
+    // -------------------------------
+    log("🧱 Calendarios IMD generados correctamente.");
 
   } catch (err) {
-    log(`❌ ERROR GENERAL: ${err}`);
+    log("❌ ERROR IMD:");
+    log(err);
   } finally {
-    await driver.quit();
+    if (driver) {
+      try { await driver.quit(); } catch {}
+    }
     log("🧹 Chrome cerrado");
   }
 })();
