@@ -225,26 +225,6 @@ async function discoverTournamentIds(driver) {
 
 
 
-// ------------------------------------------------------------
-// 🔍 DEBUG PROFUNDO: capturar EXACTAMENTE lo que devuelve Favoley
-// ------------------------------------------------------------
-try {
-  log("🧪 DEBUG: probando acceso RAW a lista de torneos…");
-  await driver.get(BASE_LIST_URL);
-
-  // Esperar un poquito sin esperar elementos
-  await driver.sleep(4000);
-
-  const htmlRaw = await driver.getPageSource();
-  fs.writeFileSync(
-    path.join(DEBUG_DIR, `fed_block_raw_${RUN_STAMP}.html`),
-    htmlRaw
-  );
-
-  log("🧪 DEBUG: snapshot RAW guardado en fed_block_raw_*.html");
-} catch (err) {
-  log("❌ DEBUG RAW ERROR: " + err);
-}
 
   const tournaments = [];
   for (const tr of trs) {
