@@ -88,6 +88,32 @@ jobs:
           name: favoley-debug
           path: calendarios/debug/
 
+      - name: Test proxy connectivity (favoley via proxy)
+        run: |
+          set -eux
+          mkdir -p calendarios/debug
+          echo "Testing proxy connectivity to favoley" > calendarios/debug/proxy_test_readme.txt
+
+          # Proxy test: try to fetch favoley via proxy (timeout 15s)
+          PROXY="http://51.178.73.63:8080"
+          echo "Using proxy: $PROXY" >> calendarios/debug/proxy_test_readme.txt
+
+          # Test connecting to the proxy itself (simple CONNECT via curl)
+          curl --max-time 15 -v --proxy "$PROXY" "https://favoley.es/es/tournaments?season=8565&category=&sex=2&sport=&tournament_status=&delegation=1630" -o calendarios/debug/proxy_favoley.html 2>calendarios/debug/proxy_curl_verbose.txt || true
+
+          # Also test proxy connectivity to the proxy address (connect only)
+          curl --max-time 8 -v --proxy "$PROXY" "http://example.com" -o /dev/null 2>>calendarios/debug/proxy_curl_verbose.txt || true
+
+          ls -la calendarios/debug > calendarios/debug/proxy_list_debug.txt
+        shell: bash
+
+      - name: Upload proxy test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy-test
+          path: calendarios/debug/
+
       - name: Run update (Federado + IMD mínimo + IMD multi)
         env:
           CHROME_BIN: /usr/bin/google-chrome
