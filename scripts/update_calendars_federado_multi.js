@@ -200,7 +200,41 @@ async function downloadWithFetch(url, timeoutMs = 10000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const resp = await fetch(url, { signal: controller.signal, redirect: "follow" });
+    async function downloadWithFetch(url, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "es-ES,es;q=0.9",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Referer": "https://favoley.es/",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Dest": "document"
+      }
+    });
+
+    clearTimeout(id);
+
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+
+    return await resp.text();
+
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
+  }
+}
+
     clearTimeout(id);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return await resp.text();
@@ -211,20 +245,34 @@ async function downloadWithFetch(url, timeoutMs = 10000) {
 }
 
 function downloadWithCurlHttp1(url, outPath) {
+  const commonHeaders = `
+    -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36" \
+    -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
+    -H "Accept-Language: es-ES,es;q=0.9" \
+    -H "Referer: https://favoley.es/" \
+  `;
+
   try {
-    // -L follow redirects, --http1.1 force http/1.1, -sS show errors, -m max time
-    execSync(`curl --http1.1 -L -sS -m 20 "${url}" -o "${outPath}"`, { stdio: "inherit" });
+    execSync(
+      `curl --http1.1 -L -sS -m 20 ${commonHeaders} "${url}" -o "${outPath}"`,
+      { stdio: "inherit" }
+    );
     return fs.readFileSync(outPath, "utf8");
+
   } catch (err) {
-    // si falla, intentar con curl sin forzar http1
     try {
-      execSync(`curl -L -sS -m 20 "${url}" -o "${outPath}"`, { stdio: "inherit" });
+      execSync(
+        `curl -L -sS -m 20 ${commonHeaders} "${url}" -o "${outPath}"`,
+        { stdio: "inherit" }
+      );
       return fs.readFileSync(outPath, "utf8");
+
     } catch (err2) {
-      throw new Error(`curl failed: ${err2 && err2.message ? err2.message : String(err2)}`);
+      throw new Error(`curl failed: ${err2?.message || err2}`);
     }
   }
 }
+
 
 async function discoverTournamentIds() {
   log(`🌐 Descargando lista de torneos (robusta) : ${BASE_LIST_URL}`);
