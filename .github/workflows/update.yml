@@ -122,7 +122,7 @@ jobs:
         run: |
           node scripts/update_calendars_federado_multi.js
           node scripts/update_calendars_imd_multi.js
-          node scripts/generate_index.js
+          node scripts/generate_index_html.js
 
       - name: Upload debug artifacts
         if: always()
