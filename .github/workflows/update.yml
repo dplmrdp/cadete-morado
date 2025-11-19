@@ -131,16 +131,19 @@ jobs:
           name: debug-imd
           path: calendarios/debug/
 
-      - name: Commit and push calendar updates
+            - name: Commit and push calendar updates
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "github-actions[bot]"
-         # añadir calendarios, index y las páginas de equipos (si existen)
+
+          # Mostrar lo que vamos a commitear (debug)
+          echo "=== Antes de git add ==="
+          ls -la calendarios || true
+          ls -la equipos || true
+          ls -la index.html || true
+
           git add calendarios/*.ics index.html equipos/*.html || true
-
-          # también añadir cualquier debug HTML útil (opcional)
-          # git add calendarios/debug/* || true
-
           git commit -m "Automated update of calendars (IMD multi + FEDERADO + HTML) [ci skip]" || echo "No changes to commit"
           git push
+
 
