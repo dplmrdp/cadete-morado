@@ -17,6 +17,31 @@ const CATEGORIES_ORDER = [
   "SENIOR",
 ];
 
+// Detectar color normalizado (puedes reusar detectColorNorm)
+function detectColorNorm(name) {
+  if (!name) return "";
+  const up = name.toUpperCase();
+  if (up.includes("MORADO")) return "MORADO";
+  if (up.includes("AMARILLO")) return "AMARILLO";
+  if (up.includes("PÚRPURA") || up.includes("PURPURA")) return "PÚRPURA";
+  if (up.includes("ALBERO")) return "ALBERO";
+  return ""; // sin color
+}
+
+function getIconForTeam(team) {
+  const isEVB = team.trim().toUpperCase().startsWith("EVB");
+  const color = detectColorNorm(team);
+  // construir clave igual que en TEAM_ICONS
+  const base = (isEVB ? "EVB " : "") + "LAS FLORES" + (color ? ` ${color}` : "");
+  // si existe la clave exacta la devolvemos
+  if (TEAM_ICONS[base]) return TEAM_ICONS[base];
+  // fallback: si existe clave sin EVB devolvemos la de sin EVB
+  const baseNoE vb = "LAS FLORES" + (color ? ` ${color}` : "");
+  if (TEAM_ICONS[baseNoE vb]) return TEAM_ICONS[baseNoE vb];
+  // fallback final
+  return TEAM_ICONS["LAS FLORES"];
+}
+
 // iconos correctos por color
 const TEAM_ICONS = {
   "LAS FLORES": "calendarios/icons/flores.svg",
@@ -147,16 +172,13 @@ function generateHTML(calendars) {
       teams.sort(sortTeams);
 
       for (const { team, path: filePath } of teams) {
-        const iconKey =
-          Object.keys(TEAM_ICONS).find(k => team.includes(k)) || "LAS FLORES";
-        const icon = TEAM_ICONS[iconKey];
-
-        html += `
+  const icon = getIconForTeam(team);
+  html += `
 <li class="team-item">
-  <img class="team-icon" src="${icon}" alt="${team}" />
+  <img class="team-icon" src="${path.posix.join(CALENDAR_DIR, icon)}" alt="${team}" />
   <a class="team-link" href="${filePath}">${team}</a>
 </li>`;
-      }
+}
 
       html += `</ul></div>`;
     }
