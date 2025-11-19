@@ -199,13 +199,9 @@ const { execSync } = require("child_process");
 async function downloadWithFetch(url, timeoutMs = 10000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    async function downloadWithFetch(url, timeoutMs = 10000) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const resp = await fetch(url, {
+    const response = await fetch(url, {
       signal: controller.signal,
       redirect: "follow",
       headers: {
@@ -214,20 +210,17 @@ async function downloadWithFetch(url, timeoutMs = 10000) {
         "Accept-Language": "es-ES,es;q=0.9",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
-        "Referer": "https://favoley.es/",
-        "Sec-Fetch-Site": "same-origin",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Dest": "document"
+        "Referer": "https://favoley.es/"
       }
     });
 
     clearTimeout(id);
 
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}`);
+    if (!response || !response.ok) {
+      throw new Error(`HTTP ${response ? response.status : "NO_RESPONSE"}`);
     }
 
-    return await resp.text();
+    return await response.text();
 
   } catch (err) {
     clearTimeout(id);
@@ -245,28 +238,25 @@ async function downloadWithFetch(url, timeoutMs = 10000) {
 }
 
 function downloadWithCurlHttp1(url, outPath) {
-  const commonHeaders = `
-    -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36" \
-    -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
-    -H "Accept-Language: es-ES,es;q=0.9" \
-    -H "Referer: https://favoley.es/" \
-  `;
+  const headers =
+    '-H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36" ' +
+    '-H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" ' +
+    '-H "Accept-Language: es-ES,es;q=0.9" ' +
+    '-H "Referer: https://favoley.es/" ';
 
   try {
     execSync(
-      `curl --http1.1 -L -sS -m 20 ${commonHeaders} "${url}" -o "${outPath}"`,
+      `curl --http1.1 -L -sS -m 20 ${headers} "${url}" -o "${outPath}"`,
       { stdio: "inherit" }
     );
     return fs.readFileSync(outPath, "utf8");
-
   } catch (err) {
     try {
       execSync(
-        `curl -L -sS -m 20 ${commonHeaders} "${url}" -o "${outPath}"`,
+        `curl -L -sS -m 20 ${headers} "${url}" -o "${outPath}"`,
         { stdio: "inherit" }
       );
       return fs.readFileSync(outPath, "utf8");
-
     } catch (err2) {
       throw new Error(`curl failed: ${err2?.message || err2}`);
     }
