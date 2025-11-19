@@ -17,32 +17,24 @@ const CATEGORIES_ORDER = [
   "SENIOR",
 ];
 
-// Detectar color normalizado (puedes reusar detectColorNorm)
+// -------------------------
+// Detectar color normalizado
+// -------------------------
 function detectColorNorm(name) {
   if (!name) return "";
   const up = name.toUpperCase();
+
   if (up.includes("MORADO")) return "MORADO";
   if (up.includes("AMARILLO")) return "AMARILLO";
   if (up.includes("PÚRPURA") || up.includes("PURPURA")) return "PÚRPURA";
   if (up.includes("ALBERO")) return "ALBERO";
+
   return ""; // sin color
 }
 
-function getIconForTeam(team) {
-  const isEVB = team.trim().toUpperCase().startsWith("EVB");
-  const color = detectColorNorm(team);
-  // construir clave igual que en TEAM_ICONS
-  const base = (isEVB ? "EVB " : "") + "LAS FLORES" + (color ? ` ${color}` : "");
-  // si existe la clave exacta la devolvemos
-  if (TEAM_ICONS[base]) return TEAM_ICONS[base];
-  // fallback: si existe clave sin EVB devolvemos la de sin EVB
-  const baseNoE vb = "LAS FLORES" + (color ? ` ${color}` : "");
-  if (TEAM_ICONS[baseNoE vb]) return TEAM_ICONS[baseNoE vb];
-  // fallback final
-  return TEAM_ICONS["LAS FLORES"];
-}
-
-// iconos correctos por color
+// -------------------------
+// Tabla de iconos (tipo A, rutas completas correctas)
+// -------------------------
 const TEAM_ICONS = {
   "LAS FLORES": "calendarios/icons/flores.svg",
   "LAS FLORES MORADO": "calendarios/icons/flores-morado.svg",
@@ -57,6 +49,29 @@ const TEAM_ICONS = {
   "EVB LAS FLORES ALBERO": "calendarios/icons/flores-albero.svg",
 };
 
+// -------------------------
+// Asignar icono a cada equipo
+// -------------------------
+function getIconForTeam(team) {
+  const up = team.toUpperCase();
+  const isEVB = up.startsWith("EVB");
+  const color = detectColorNorm(up);
+
+  // clave exacta
+  const keyExact =
+    (isEVB ? "EVB " : "") + "LAS FLORES" + (color ? ` ${color}` : "");
+
+  if (TEAM_ICONS[keyExact]) return TEAM_ICONS[keyExact];
+
+  // fallback sin EVB
+  const keyBase = "LAS FLORES" + (color ? ` ${color}` : "");
+  if (TEAM_ICONS[keyBase]) return TEAM_ICONS[keyBase];
+
+  // fallback final
+  return TEAM_ICONS["LAS FLORES"];
+}
+
+// -------------------------
 function detectCategoryFromFilename(filename) {
   const lower = filename.toLowerCase();
   if (lower.includes("benjamin")) return "BENJAMÍN";
@@ -70,45 +85,30 @@ function detectCategoryFromFilename(filename) {
 }
 
 // -------------------------
-// Detectar color de un nombre ya normalizado
-// -------------------------
-function detectColorNorm(name) {
-  if (name.includes("MORADO")) return "MORADO";
-  if (name.includes("AMARILLO")) return "AMARILLO";
-  if (name.includes("PÚRPURA") || name.includes("PURPURA")) return "PÚRPURA";
-  if (name.includes("ALBERO")) return "ALBERO";
-  return ""; // sin color
-}
-
-// -------------------------
-// Ordenar equipos según tus reglas:
-// 1) Sin EVB primero, luego EVB
-// 2) Colores: "", MORADO, AMARILLO, PÚRPURA, ALBERO
+// Ordenar equipos según reglas
 // -------------------------
 function sortTeams(a, b) {
-  const nameA = a.team;
-  const nameB = b.team;
+  const A = a.team.toUpperCase();
+  const B = b.team.toUpperCase();
 
-  const aIsEVB = nameA.startsWith("EVB");
-  const bIsEVB = nameB.startsWith("EVB");
+  const aIsEVB = A.startsWith("EVB");
+  const bIsEVB = B.startsWith("EVB");
 
-  if (aIsEVB !== bIsEVB) return aIsEVB ? 1 : -1; // EVB al final
+  if (aIsEVB !== bIsEVB) return aIsEVB ? 1 : -1;
 
-  const colorOrder = ["", "MORADO", "AMARILLO", "PÚRPURA", "ALBERO"];
+  const order = ["", "MORADO", "AMARILLO", "PÚRPURA", "ALBERO"];
 
-  const colA = detectColorNorm(nameA);
-  const colB = detectColorNorm(nameB);
+  const colA = detectColorNorm(A);
+  const colB = detectColorNorm(B);
 
-  const idxA = colorOrder.indexOf(colA);
-  const idxB = colorOrder.indexOf(colB);
+  const idxA = order.indexOf(colA);
+  const idxB = order.indexOf(colB);
 
   if (idxA !== idxB) return idxA - idxB;
 
-  return nameA.localeCompare(nameB, "es", { sensitivity: "base" });
+  return A.localeCompare(B, "es", { sensitivity: "base" });
 }
 
-// -------------------------
-// Recopilar ficheros .ics
 // -------------------------
 function collectCalendars() {
   const allFiles = fs.readdirSync(CALENDAR_DIR).filter(f => f.endsWith(".ics"));
@@ -117,6 +117,8 @@ function collectCalendars() {
   for (const file of allFiles) {
     const competition = file.startsWith("federado_") ? "FEDERADO" : "IMD";
 
+    const category = detectCategoryFromFilename(file);
+
     const clean = file
       .replace(/^federado_/, "")
       .replace(/^imd_/, "")
@@ -124,11 +126,7 @@ function collectCalendars() {
       .replace(/_/g, " ")
       .toUpperCase();
 
-    const parts = clean.split(" ");
-    const category = detectCategoryFromFilename(file);
-
-
-    const rawName = clean.replace(category, "").trim();
+    const rawName = clean.replace(category.toUpperCase(), "").trim();
     const pretty = normalizeTeamDisplay(rawName);
 
     if (!data[category]) data[category] = { FEDERADO: [], IMD: [] };
@@ -142,8 +140,6 @@ function collectCalendars() {
   return data;
 }
 
-// -------------------------
-// Generar HTML final
 // -------------------------
 function generateHTML(calendars) {
   let html = `<!DOCTYPE html>
@@ -163,22 +159,23 @@ function generateHTML(calendars) {
 
     html += `<section class="category-block"><h2 class="category-title">${category}</h2>`;
 
-    for (const competition of ["FEDERADO", "IMD"]) {
-      const teams = calendars[category][competition];
+    for (const comp of ["FEDERADO", "IMD"]) {
+      const teams = calendars[category][comp];
       if (!teams || !teams.length) continue;
 
-      html += `<div class="competition"><h3 class="competition-title">${competition}</h3><ul class="team-list">`;
+      html += `<div class="competition"><h3 class="competition-title">${comp}</h3><ul class="team-list">`;
 
       teams.sort(sortTeams);
 
       for (const { team, path: filePath } of teams) {
-  const icon = getIconForTeam(team);
-  html += `
+        const icon = getIconForTeam(team);
+
+        html += `
 <li class="team-item">
-  <img class="team-icon" src="${path.posix.join(CALENDAR_DIR, icon)}" alt="${team}" />
+  <img class="team-icon" src="${icon}" alt="${team}" />
   <a class="team-link" href="${filePath}">${team}</a>
 </li>`;
-}
+      }
 
       html += `</ul></div>`;
     }
@@ -193,11 +190,9 @@ function generateHTML(calendars) {
 `;
 
   fs.writeFileSync(OUTPUT_HTML, html, "utf-8");
-  console.log(`✅ index.html generado correctamente.`);
+  console.log("✅ index.html generado correctamente.");
 }
 
-// -------------------------
-// Main
 // -------------------------
 (function main() {
   console.log("📋 Generando index.html con nombres normalizados...");
