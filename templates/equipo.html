@@ -7,35 +7,46 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 </head>
 <body>
-<div class="container team-page">
-  <a class="volver" href="../index.html">← Volver</a>
+<div class="app-container">
 
-  <header class="team-header">
-    <img class="team-page-icon" src="../{{icon}}" alt="{{team}}">
-    <div class="team-header-text">
+  <!-- CABECERA EQUIPO -->
+  <header class="app-header">
+    <img class="header-icon" src="../{{icon}}" alt="{{team}}">
+    <div class="header-text">
       <h1>{{team}}</h1>
-      <p class="meta">{{category}} — {{competition}}</p>
+      <p class="subinfo">{{category}} — {{competition}}</p>
     </div>
   </header>
 
-  <main>
-    <section class="clasificacion">
-      <h2>Clasificación</h2>
-      <div class="tabla-clasificacion">
-        <p>Próximamente: aquí aparecerá la clasificación de la competición.</p>
-      </div>
-    </section>
+  <!-- CLASIFICACIÓN -->
+  <section class="block">
+    <h2>Clasificación</h2>
 
-    <section class="suscribir">
-      <h2>Suscribirse al calendario</h2>
-      <p>Puedes suscribirte al calendario oficial del equipo:</p>
-      <a class="boton-subs" href="{{webcal}}">📅 Suscribirse al Calendario</a>
-    </section>
-  </main>
+    <div class="clasificacion-simple">
+      <!-- Se insertará aquí la clasificación generada -->
+      {{clasificacion}}
+    </div>
+  </section>
 
-  <footer>
-    <p><small>Horarios publicados por la Federación e IMD. Pueden variar sin previo aviso. Consultar siempre al Club.</small></p>
-  </footer>
+  <!-- PRÓXIMOS PARTIDOS -->
+  <section class="block">
+    <h2>Próximos partidos</h2>
+
+    <div class="proximos-partidos">
+      {{proximosPartidos}}
+    </div>
+  </section>
+
+  <!-- SUSCRIPCIÓN -->
+  <section class="block">
+    <a class="boton-subs" href="{{webcal}}">📅 Suscribirse al calendario</a>
+
+    <p class="disclaimer">
+      Horarios proporcionados por IMD y Federación, pueden variar sin previo aviso.  
+      Seguir siempre los oficiales del Club.
+    </p>
+  </section>
+
 </div>
 </body>
 </html>
