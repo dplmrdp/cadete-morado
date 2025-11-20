@@ -17,7 +17,7 @@ body {
 
 .volver {
   display: inline-block;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   font-size: 0.9rem;
   color: #0a58ca;
   text-decoration: none;
@@ -29,13 +29,13 @@ body {
 .team-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 20px;
 }
 
 .team-page-icon {
-  width: 50px;
-  height: 50px;
+  width: 56px;
+  height: 56px;
   object-fit: contain;
 }
 
@@ -47,7 +47,7 @@ body {
 
 .team-header-text .meta {
   margin-top: 3px;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: #666;
 }
 
@@ -55,79 +55,81 @@ body {
    SECTION TITLES
 =========================== */
 section h2 {
-  font-size: 1.15rem;
-  margin: 20px 0 10px;
+  font-size: 1.2rem;
+  margin: 20px 0 12px;
   font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
 /* ===========================
-   CLASIFICACIÓN – MOBILE FIRST
+   CLASIFICACIÓN – TABLA REAL
 =========================== */
 
 .table-lite {
   width: 100%;
   border-collapse: collapse;
   background: #fff;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  margin-bottom: 15px;
 }
 
-/* header */
-.table-lite thead tr {
-  background: #e9ecef;
-}
-
+/* encabezado */
 .table-lite thead th {
-  padding: 6px 2px;
-  font-size: 0.74rem;
+  background: #e7e9ec;
+  padding: 8px 4px;
+  font-size: 0.78rem;
   text-align: center;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
 }
 
-/* rows */
-.table-lite tbody tr {
-  border-bottom: 1px solid #f3f3f3;
-}
-
+/* filas */
 .table-lite tbody td {
-  padding: 7px 3px;
+  padding: 7px 4px;
   font-size: 0.82rem;
+  border-bottom: 1px solid #f1f1f1;
 }
 
-/* Equipo ocupa más */
+/* primera columna (equipo) ocupa más */
 .table-lite tbody td.equipo {
-  font-weight: 600;
   text-align: left;
-  width: 50%;
+  width: 48%;
+  font-weight: 600;
 }
 
-/* números compactos */
+/* columnas numéricas */
 .table-lite tbody td.num {
+  width: 13%;
   text-align: center;
-  width: 10%;
   font-weight: 500;
 }
 
+/* última fila sin borde extra */
+.table-lite tbody tr:last-child td {
+  border-bottom: none;
+}
+
 /* ===========================
-   PRÓXIMOS PARTIDOS – TARJETAS
+   PRÓXIMOS PARTIDOS
 =========================== */
 .partido {
   background: #fff;
   padding: 12px 14px;
   margin-bottom: 10px;
-  border-radius: 10px;
+  border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
 .partido .fecha {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: #777;
 }
 
 .partido .vs {
-  font-size: 0.98rem;
+  font-size: 0.95rem;
   margin-top: 4px;
   font-weight: 600;
 }
@@ -137,27 +139,26 @@ section h2 {
 =========================== */
 .boton-subs {
   display: inline-block;
-  padding: 12px 18px;
-  background: #0a58ca;
+  padding: 10px 16px;
+  background: #8fb9ff; /* azul suave */
   color: #fff;
   text-decoration: none;
-  border-radius: 10px;
-  font-size: 1rem;
-  margin-top: 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
 }
 
 .disclaimer {
   margin-top: 8px;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: #666;
   line-height: 1.25rem;
 }
 
 /* ===========================
-  SMALL LINKS
+   SMALL LINKS
 =========================== */
 .small-links {
-  margin-top: 4px;
+  margin-top: 8px;
   font-size: 0.74rem;
 }
 
