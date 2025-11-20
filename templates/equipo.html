@@ -3,48 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <title>{{title}}</title>
-<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../style_team.css">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 </head>
 <body>
-<div class="app-container">
+<div class="container">
+<a class="volver" href="../index.html">← Volver</a>
 
-  <!-- CABECERA EQUIPO -->
-  <header class="app-header">
-    <img class="header-icon" src="../{{icon}}" alt="{{team}}">
-    <div class="header-text">
-      <h1>{{team}}</h1>
-      <p class="subinfo">{{category}} — {{competition}}</p>
-    </div>
-  </header>
+<header class="team-header">
+  <img class="team-page-icon" src="../{{icon}}" alt="{{team}}">
+  <div class="team-header-text">
+    <h1>{{team}}</h1>
+    <p class="meta">{{category}} — {{competition}}</p>
+  </div>
+</header>
 
-  <!-- CLASIFICACIÓN -->
-  <section class="block">
-    <h2>Clasificación</h2>
+<section>
+  <h2>Clasificación</h2>
 
-    <div class="clasificacion-simple">
-      {{clasificacion}}
-    </div>
-  </section>
+  <!-- Aquí más adelante añadiremos los datos reales -->
+  <table class="table-lite">
+    <thead>
+      <tr>
+        <th>Equipo</th>
+        <th>Pts</th>
+        <th>PJ</th>
+        <th>PG</th>
+        <th>PP</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="5">Próximamente…</td></tr>
+    </tbody>
+  </table>
+</section>
 
-  <!-- PRÓXIMOS PARTIDOS -->
-  <section class="block">
-    <h2>Próximos partidos</h2>
+<section>
+  <h2>Próximos partidos</h2>
+  <p>Próximamente…</p>
+</section>
 
-    <div class="proximos-partidos">
-      {{proximosPartidos}}
-    </div>
-  </section>
-
-  <!-- SUSCRIPCIÓN -->
-  <section class="block">
-    <a class="boton-subs" href="{{webcal}}">📅 Suscribirse al calendario</a>
-
-    <p class="disclaimer">
-      Horarios proporcionados por IMD y Federación, pueden variar sin previo aviso.<br>
-      Seguir siempre los oficiales del Club.
-    </p>
-  </section>
+<section>
+  <h2>Suscribirse</h2>
+  <a class="boton-subs" href="{{webcal}}">📅 Suscribirse al Calendario</a>
+  <p class="disclaimer">
+    Horarios proporcionados por IMD y Federación, pueden variar sin previo aviso.
+    Seguir siempre los oficiales del Club.
+  </p>
+</section>
 
 </div>
 </body>
