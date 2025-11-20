@@ -1,4 +1,5 @@
 // scripts/generate_index_html.js
+const TEMPLATE_DIR = "templates";
 const fs = require("fs");
 const path = require("path");
 const { normalizeTeamDisplay } = require("./team_name_utils");
@@ -165,56 +166,27 @@ function generateTeamPage({ team, category, competition, filename, urlPath, slug
   const title = `${team} – ${category} (${competition})`;
   const webcalUrl = `webcal://${BASE_WEBCAL_HOST}/${BASE_REPO_PATH}/${encodeURI(urlPath)}`;
 
-  // ruta relativa al index.css e iconos: las páginas están en /equipos/, por eso usamos ../
-  const iconRel = iconPath; // iconPath ya contiene "calendarios/icons/..."
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>${escapeHtml(title)}</title>
-<link rel="stylesheet" href="../style.css">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-</head>
-<body>
-<div class="container team-page">
-  <a class="volver" href="../index.html">← Volver</a>
+  // cargar plantilla
+  const templatePath = path.join(TEMPLATE_DIR, "equipo.html");
+  let tpl = fs.readFileSync(templatePath, "utf8");
 
-  <header class="team-header">
-    <img class="team-page-icon" src="../${toPosix(iconRel)}" alt="${escapeHtml(team)}" />
-    <div class="team-header-text">
-      <h1>${escapeHtml(team)}</h1>
-      <p class="meta">${escapeHtml(category)} — ${escapeHtml(competition)}</p>
-    </div>
-  </header>
+  // reemplazar variables
+  tpl = tpl
+    .replace(/{{title}}/g, escapeHtml(title))
+    .replace(/{{team}}/g, escapeHtml(team))
+    .replace(/{{category}}/g, escapeHtml(category))
+    .replace(/{{competition}}/g, escapeHtml(competition))
+    .replace(/{{icon}}/g, iconPath)
+    .replace(/{{webcal}}/g, webcalUrl);
 
-  <main>
-    <section class="clasificacion">
-      <h2>Clasificación</h2>
-      <div class="tabla-clasificacion">
-        <p>Próximamente: aquí aparecerá la clasificación de la competición.</p>
-      </div>
-    </section>
-
-    <section class="suscribir">
-      <h2>Suscribirse al calendario</h2>
-      <p>Puedes suscribirte al calendario oficial del equipo:</p>
-      <a class="boton-subs" href="${webcalUrl}">📅 Suscribirse al Calendario</a>
-    </section>
-  </main>
-
-  <footer style="margin-top:2rem">
-    <p><small>Generado automáticamente. Si falta información, revisa la fuente de datos.</small></p>
-  </footer>
-</div>
-</body>
-</html>`;
-
-  // escribir fichero
+  // crear destino
   const outDir = path.join(EQUIPOS_DIR);
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
   const outPath = path.join(outDir, `${slug}.html`);
-  fs.writeFileSync(outPath, html, "utf-8");
+  fs.writeFileSync(outPath, tpl, "utf8");
 }
+
 
 // -------------------------
 // Escapar HTML simple (evita inyección accidental)
