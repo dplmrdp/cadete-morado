@@ -221,7 +221,7 @@ function generateTeamPage({ team, category, competition, urlPath, slug, iconPath
   const proximosHtml = buildPlaceholderProximos(team);
 
   // reemplazar variables en plantilla
-  tpl = tpl
+   tpl = tpl
     .replace(/{{title}}/g, escapeHtml(title))
     .replace(/{{team}}/g, escapeHtml(team))
     .replace(/{{category}}/g, escapeHtml(category))
@@ -231,7 +231,8 @@ function generateTeamPage({ team, category, competition, urlPath, slug, iconPath
     .replace(/{{clasificacion}}/g, clasificacionHtml)
     .replace(/{{proximosPartidos}}/g, proximosHtml)
     .replace(/{{rankingUrl}}/g, rankingUrl)
-    .replace(/{{calendarUrl}}/g, calendarOfficialUrl);
+    .replace(/{{calendarOfficialUrl}}/g, calendarOfficialUrl);
+
 
   // crear destino
   const outDir = path.join(EQUIPOS_DIR);
