@@ -145,5 +145,3 @@ jobs:
           git commit -m "Automated update of calendars (IMD multi + FEDERADO + HTML) [ci skip]" || echo "No changes to commit"
           git push
 
- # node scripts/update_calendars_federado_multi.js
-# node scripts/update_calendars_imd_multi.js
