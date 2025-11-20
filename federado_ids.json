@@ -1,0 +1,11 @@
+{
+  "ALEVIN_FEMENINO_MORADO": { "tournament": 1321419, "group": 3654487 },
+  "ALEVIN_FEMENINO_AMARILLO": { "tournament": 1321419, "group": 3654486 },
+  "INFANTIL_FEMENINO_MORADO": { "tournament": 1321417, "group": 3652130 },
+  "INFANTIL_FEMENINO_AMARILLO": { "tournament": 1321417, "group": 3652130 },
+  "INFANTIL_FEMENINO_PURPURA": { "tournament": 1321417, "group": 3652131 },
+  "CADETE_FEMENINO_MORADO": { "tournament": 1321301, "group": 3652105 },
+  "CADETE_FEMENINO_AMARILLO": { "tournament": 1321301, "group": 3652105 },
+  "JUVENIL_FEMENINO": { "tournament": 1321299, "group": 3652138 },
+  "JUNIOR_FEMENINO": { "tournament": 1321295, "group": 0 }
+}
