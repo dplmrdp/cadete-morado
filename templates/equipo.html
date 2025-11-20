@@ -21,38 +21,32 @@
 <section>
   <h2>Clasificación</h2>
 
-  <!-- enlaces oficiales -->
-  <div class="links-oficiales">
-    <a href="{{rankingUrl}}" target="_blank">📊 Ver clasificación oficial</a><br>
-    <a href="{{calendarOfficialUrl}}" target="_blank">📅 Ver calendario oficial</a>
+  <div class="table-lite">
+    {{clasificacion}}
   </div>
 
-  <table class="table-lite">
-    <thead>
-      <tr>
-        <th>Equipo</th>
-        <th>Pts</th>
-        <th>PJ</th>
-        <th>PG</th>
-        <th>PP</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td colspan="5">Próximamente…</td></tr>
-    </tbody>
-  </table>
+  <p class="enlace-oficial">
+    {{rankingUrl}}
+  </p>
 </section>
 
 <section>
   <h2>Próximos partidos</h2>
-  <p>Próximamente…</p>
+
+  <div class="proximos">
+    {{proximosPartidos}}
+  </div>
+
+  <p class="enlace-oficial">
+    {{calendarUrl}}
+  </p>
 </section>
 
 <section>
   <h2>Suscribirse</h2>
   <a class="boton-subs" href="{{webcal}}">📅 Suscribirse al Calendario</a>
   <p class="disclaimer">
-    Horarios proporcionados por IMD y Federación, pueden variar sin previo aviso.
+    Horarios proporcionados por IMD y Federación, pueden variar sin previo aviso.<br>
     Seguir siempre los oficiales del Club.
   </p>
 </section>
