@@ -124,3 +124,124 @@ h1 { font-size: 1.8rem; margin-bottom: 18px; }
     font-size: 1.15rem;
   }
 }
+
+/* ==========================================================
+   ESTILO APP MÓVIL PARA /equipos/<slug>.html
+   ========================================================== */
+
+.app-container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 1rem;
+  font-family: system-ui, -apple-system, Roboto;
+}
+
+/* CABECERA */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+
+.header-icon {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 14px;
+  background: white;
+  padding: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+}
+
+.header-text h1 {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
+.header-text .subinfo {
+  margin-top: 4px;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+/* BLOQUES (tipo tarjeta) */
+.block {
+  background: white;
+  border-radius: 14px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 1.1rem;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.05);
+}
+
+.block h2 {
+  margin: 0 0 0.6rem 0;
+  font-size: 1.15rem;
+}
+
+/* CLASIFICACIÓN SIMPLE */
+.clasificacion-simple .fila {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #f1f1f1;
+}
+
+.clasificacion-simple .fila:last-child {
+  border-bottom: none;
+}
+
+.clasificacion-simple .equipo {
+  font-weight: 600;
+}
+
+.clasificacion-simple .datos {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+/* PRÓXIMOS PARTIDOS */
+.proximos-partidos .partido {
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f1f1;
+}
+
+.proximos-partidos .partido:last-child {
+  border-bottom: none;
+}
+
+.proximos-partidos .fecha {
+  color: #0073ff;
+  font-weight: 600;
+}
+
+.proximos-partidos .vs {
+  color: #333;
+}
+
+/* BOTÓN DE SUSCRIPCIÓN */
+.boton-subs {
+  display: block;
+  text-align: center;
+  background: #0b72ff;
+  color: white;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  margin-bottom: 0.6rem;
+}
+
+.boton-subs:hover {
+  background: #005bd6;
+}
+
+/* DISCLAIMER */
+.disclaimer {
+  font-size: 0.78rem;
+  color: #666;
+  line-height: 1.3;
+}
+
