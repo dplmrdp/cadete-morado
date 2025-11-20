@@ -56,9 +56,9 @@ h1 { font-size: 1.8rem; margin-bottom: 18px; }
 
 /* ICONO grande controlado */
 .team-page-icon {
-  width: 88px;
-  height: 88px;
-  min-width: 88px;
+  width: 80px;
+  height: 80px;
+  min-width: 80px;
   object-fit: contain;
   background: white;
   border-radius: 12px;
