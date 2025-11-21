@@ -120,7 +120,8 @@ jobs:
           CHROMEDRIVER_PATH: /usr/local/bin/chromedriver
           DEBUG_IMD: "1"
         run: |
-         
+          node scripts/update_calendars_federado_multi.js
+          node scripts/update_calendars_imd_multi.js
           node scripts/generate_index_html.js
 
       - name: Upload debug artifacts
