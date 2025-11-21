@@ -4,6 +4,7 @@
 // Ahora además carga federado_ids.json (clave = nombre del fichero sin .ics)
 // y pasa rankingUrl / calendarOfficialUrl a la plantilla.
 
+const { fetchFederadoRanking } = require("./fetch_federado_ranking");
 const fs = require("fs");
 const path = require("path");
 const { normalizeTeamDisplay } = require("./team_name_utils");
@@ -161,23 +162,47 @@ function collectCalendars() {
 // -------------------------
 // PLACEHOLDERS (clasificación y próximos partidos)
 // -------------------------
-function buildPlaceholderClasificacion(team) {
-  const rows = [
-    { team: team, pts: 12, j: 6, g: 4, p: 2 },
-    { team: "EVB LAS FLORES", pts: 9, j: 6, g: 3, p: 3 },
-    { team: "Rival 1", pts: 7, j: 6, g: 2, p: 4 },
-  ];
+function buildClasificacionHTML(rows) {
+  if (!rows || !rows.length) {
+    return `<p>Clasificación no disponible.</p>`;
+  }
 
-  return rows
-    .map(
-      r => `
-<div class="fila">
-  <span class="equipo">${escapeHtml(r.team)}</span>
-  <span class="datos">${r.pts} pts · J${r.j} · G${r.g} · P${r.p}</span>
-</div>`
-    )
-    .join("\n");
+  let html = `
+<table class="clasificacion">
+  <thead>
+    <tr>
+      <th>Equipo</th>
+      <th>PTS</th>
+      <th>PJ</th>
+      <th>PG</th>
+      <th>PP</th>
+      <th>SG</th>
+      <th>SP</th>
+    </tr>
+  </thead>
+  <tbody>
+`;
+
+  for (const r of rows) {
+    html += `
+    <tr>
+      <td>${escapeHtml(r.team)}</td>
+      <td>${r.pts}</td>
+      <td>${r.pj}</td>
+      <td>${r.pg}</td>
+      <td>${r.pp}</td>
+      <td>${r.sg}</td>
+      <td>${r.sp}</td>
+    </tr>`;
+  }
+
+  html += `
+  </tbody>
+</table>`;
+
+  return html;
 }
+
 
 function buildPlaceholderProximos(team) {
   return `
@@ -194,7 +219,7 @@ function buildPlaceholderProximos(team) {
 // -------------------------
 // GENERAR PÁGINA INDIVIDUAL
 // -------------------------
-function generateTeamPage({ team, category, competition, urlPath, slug, iconPath, federadoInfo }) {
+async function generateTeamPage({ team, category, competition, urlPath, slug, iconPath, federadoInfo }) {
   const title = `${team} – ${category} (${competition})`;
   const webcalUrl = `webcal://${BASE_WEBCAL_HOST}/${BASE_REPO_PATH}/${encodeURI(urlPath)}`;
 
@@ -215,46 +240,22 @@ function generateTeamPage({ team, category, competition, urlPath, slug, iconPath
   // ================================
   // CLASIFICACIÓN (placeholder real)
   // ================================
-  const clasificacionHtml = `
-<table class="table-lite">
-  <thead>
-    <tr>
-      <th>Equipo</th>
-      <th>PTS</th>
-      <th>PJ</th>
-      <th>PG</th>
-      <th>PP</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td class="equipo">${escapeHtml(team)}</td>
-      <td class="num">12</td>
-      <td class="num">6</td>
-      <td class="num">4</td>
-      <td class="num">2</td>
-    </tr>
-    <tr>
-      <td class="equipo">EVB Las Flores</td>
-      <td class="num">9</td>
-      <td class="num">6</td>
-      <td class="num">3</td>
-      <td class="num">3</td>
-    </tr>
-    <tr>
-      <td class="equipo">Rival 1</td>
-      <td class="num">7</td>
-      <td class="num">6</td>
-      <td class="num">2</td>
-      <td class="num">4</td>
-    </tr>
-  </tbody>
-</table>
+ let clasificacionHtml = "<p>Cargando…</p>";
 
-<div class="small-links">
-  ${rankingUrl ? `<a href="${rankingUrl}" target="_blank">Clasificación oficial</a>` : ""}
-</div>
-`;
+if (competition === "FEDERADO" && federadoInfo && federadoInfo.group !== 0) {
+  try {
+    const ranking = await fetchFederadoRanking(
+      federadoInfo.tournament,
+      federadoInfo.group
+    );
+    if (ranking) clasificacionHtml = buildClasificacionHTML(ranking);
+  } catch (err) {
+    console.warn("⚠️ Error obteniendo clasificación:", err);
+  }
+} else {
+  clasificacionHtml = "<p>No disponible para competición IMD.</p>";
+}
+
 
   // ================================
   // PRÓXIMOS PARTIDOS (placeholder)
@@ -315,7 +316,7 @@ function escapeHtml(s) {
 // -------------------------
 // Generar HTML principal (index)
  // -------------------------
-function generateHTML(calendars, federadoMap) {
+async function generateHTML(calendars, federadoMap) {
   // Asegurar carpeta equipos existencia (vacía/creada)
   if (!fs.existsSync(EQUIPOS_DIR)) fs.mkdirSync(EQUIPOS_DIR, { recursive: true });
 
@@ -361,7 +362,7 @@ function generateHTML(calendars, federadoMap) {
   }
 
   // generar la página individual también
-  generateTeamPage({
+  await generateTeamPage({
     team: team,
     category,
     competition: comp,
@@ -417,7 +418,7 @@ function generateHTML(calendars, federadoMap) {
     }
 
     const calendars = collectCalendars();
-    generateHTML(calendars, federadoMap);
+    await generateHTML(calendars, federadoMap);
   } catch (err) {
     console.error("❌ ERROR GENERAL:", err);
     process.exit(1);
