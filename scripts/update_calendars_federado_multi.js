@@ -4,6 +4,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const fetch = require("node-fetch");
 const os = require("os");
 const { parseFederadoHTML } = require("./parse_fed_html");
 const { Builder, By, until } = require("selenium-webdriver");
