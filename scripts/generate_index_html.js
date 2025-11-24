@@ -1,22 +1,24 @@
 // scripts/generate_index_html.js
 // Generador de index + páginas /equipos/
 // Lee calendarios/*.ics, genera index.html y equipos/<slug>.html
-// Ahora además carga federado_ids.json (clave = nombre del fichero sin .ics)
-// y pasa rankingUrl / calendarOfficialUrl a la plantilla.
+// Ahora además integra federado_ids.json y clasificaciones IMD.
 
 const { fetchFederadoRanking } = require("./fetch_federado_ranking");
 const fs = require("fs");
 const path = require("path");
 const { normalizeTeamDisplay } = require("./team_name_utils");
 
+// -------------------------
+// Constantes
+// -------------------------
 const OUTPUT_HTML = "index.html";
 const CALENDAR_DIR = "calendarios";
 const EQUIPOS_DIR = "equipos";
 const TEMPLATE_DIR = "templates";
 const BASE_WEBCAL_HOST = "dplmrdp.github.io";
-const BASE_REPO_PATH = "lasflores"; // repo/site path
+const BASE_REPO_PATH = "lasflores";
 
-// orden de categorías en el HTML
+// Orden de categorías en el HTML
 const CATEGORIES_ORDER = [
   "BENJAMÍN",
   "ALEVÍN",
@@ -33,17 +35,15 @@ const CATEGORIES_ORDER = [
 function detectColorNorm(name) {
   if (!name) return "";
   const up = name.toUpperCase();
-
   if (up.includes("MORADO")) return "MORADO";
   if (up.includes("AMARILLO")) return "AMARILLO";
   if (up.includes("PÚRPURA") || up.includes("PURPURA")) return "PÚRPURA";
   if (up.includes("ALBERO")) return "ALBERO";
-
-  return ""; // sin color
+  return "";
 }
 
 // -------------------------
-// Tabla de iconos (rutas relativas desde repo root)
+// Iconos
 // -------------------------
 const TEAM_ICONS = {
   "LAS FLORES": "calendarios/icons/flores.svg",
@@ -59,23 +59,19 @@ const TEAM_ICONS = {
   "EVB LAS FLORES ALBERO": "calendarios/icons/flores-albero.svg",
 };
 
-// -------------------------
-// Asignar icono a cada equipo
-// -------------------------
 function getIconForTeam(team) {
   const up = (team || "").toUpperCase();
   const isEVB = up.startsWith("EVB");
   const color = detectColorNorm(up);
-
   const keyExact = (isEVB ? "EVB " : "") + "LAS FLORES" + (color ? ` ${color}` : "");
   if (TEAM_ICONS[keyExact]) return TEAM_ICONS[keyExact];
-
   const keyBase = "LAS FLORES" + (color ? ` ${color}` : "");
   if (TEAM_ICONS[keyBase]) return TEAM_ICONS[keyBase];
-
   return TEAM_ICONS["LAS FLORES"];
 }
 
+// -------------------------
+// Categoría desde nombre fichero
 // -------------------------
 function detectCategoryFromFilename(filename) {
   const lower = filename.toLowerCase();
@@ -90,60 +86,48 @@ function detectCategoryFromFilename(filename) {
 }
 
 // -------------------------
+// Ordenar equipos
+// -------------------------
 function sortTeams(a, b) {
   const A = (a.team || "").toUpperCase();
   const B = (b.team || "").toUpperCase();
-
   const aIsEVB = A.startsWith("EVB");
   const bIsEVB = B.startsWith("EVB");
-
   if (aIsEVB !== bIsEVB) return aIsEVB ? 1 : -1;
-
   const order = ["", "MORADO", "AMARILLO", "PÚRPURA", "ALBERO"];
-
   const colA = detectColorNorm(A);
   const colB = detectColorNorm(B);
-
   const idxA = order.indexOf(colA);
   const idxB = order.indexOf(colB);
-
   if (idxA !== idxB) return idxA - idxB;
-
   return A.localeCompare(B, "es", { sensitivity: "base" });
 }
 
-// -------------------------
-// Util: convertir path a URL-friendly (posix)
 function toPosix(p) {
   return p.split(path.sep).join("/");
 }
 
 // -------------------------
-// Recopilar ficheros .ics
+// Recopilar calendarios .ics
 // -------------------------
 function collectCalendars() {
   if (!fs.existsSync(CALENDAR_DIR)) return {};
   const allFiles = fs.readdirSync(CALENDAR_DIR).filter(f => f.toLowerCase().endsWith(".ics"));
   const data = {};
-
   for (const file of allFiles) {
     const competition = file.toLowerCase().startsWith("federado_") ? "FEDERADO" : "IMD";
-
     const category = detectCategoryFromFilename(file);
-
     const clean = file
       .replace(/^federado_/, "")
       .replace(/^imd_/, "")
       .replace(/\.ics$/i, "")
       .replace(/_/g, " ")
       .toUpperCase();
-
     const rawName = clean.replace(category.toUpperCase(), "").trim();
     const pretty = normalizeTeamDisplay(rawName);
-
-    const filePath = path.join(CALENDAR_DIR, file); // filesystem path
-    const fileUrlPath = toPosix(filePath); // url path with forward slashes
-    const slug = file.replace(/\.ics$/i, ""); // filename without extension
+    const filePath = path.join(CALENDAR_DIR, file);
+    const fileUrlPath = toPosix(filePath);
+    const slug = file.replace(/\.ics$/i, "");
 
     if (!data[category]) data[category] = { FEDERADO: [], IMD: [] };
 
@@ -152,32 +136,24 @@ function collectCalendars() {
       path: filePath,
       urlPath: fileUrlPath,
       filename: file,
-      slug: slug,
+      slug,
     });
   }
-
   return data;
 }
 
 // -------------------------
-// PLACEHOLDERS (clasificación y próximos partidos)
+// Helpers HTML: Clasificación FEDERADO
 // -------------------------
 function buildClasificacionHTML(rows) {
-  if (!rows || !rows.length) {
-    return `<p>Clasificación no disponible.</p>`;
-  }
+  if (!rows || !rows.length) return `<p>Clasificación no disponible.</p>`;
 
   let html = `
 <table class="clasificacion">
   <thead>
     <tr>
-      <th>Equipo</th>
-      <th>PTS</th>
-      <th>PJ</th>
-      <th>PG</th>
-      <th>PP</th>
-      <th>SG</th>
-      <th>SP</th>
+      <th>Equipo</th><th>PTS</th><th>PJ</th><th>PG</th>
+      <th>PP</th><th>SG</th><th>SP</th>
     </tr>
   </thead>
   <tbody>
@@ -196,88 +172,88 @@ function buildClasificacionHTML(rows) {
     </tr>`;
   }
 
-  html += `
-  </tbody>
-</table>`;
-
+  html += `</tbody></table>`;
   return html;
 }
 
-function buildPlaceholderProximos(team) {
-  return `
-<div class="partido">
-  <div class="fecha">Sáb 18 — 12:00</div>
-  <div class="vs">${escapeHtml(team)} vs Rival X</div>
-</div>
-<div class="partido">
-  <div class="fecha">Dom 19 — 10:00</div>
-  <div class="vs">Rival Y vs ${escapeHtml(team)}</div>
-</div>`;
+// -------------------------
+// Helpers HTML: Clasificación IMD
+// -------------------------
+function buildClasificacionIMD(rows) {
+  if (!rows || !rows.length) return `<p>Clasificación no disponible.</p>`;
+
+  let html = `
+<table class="clasificacion">
+  <thead>
+    <tr>
+      <th>#</th><th>Equipo</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>
+      <th>PNP</th><th>JF</th><th>JC</th><th>TF</th><th>TC</th><th>Puntos</th>
+    </tr>
+  </thead>
+  <tbody>
+`;
+
+  for (const r of rows) {
+    html += `
+    <tr>
+      <td>${r.puesto || ""}</td>
+      <td>${escapeHtml(r.equipo)}</td>
+      <td>${r.pj}</td>
+      <td>${r.pg}</td>
+      <td>${r.pe}</td>
+      <td>${r.pp}</td>
+      <td>${r.pnp}</td>
+      <td>${r.jf}</td>
+      <td>${r.jc}</td>
+      <td>${r.tf}</td>
+      <td>${r.tc}</td>
+      <td>${r.puntos}</td>
+    </tr>`;
+  }
+
+  html += `</tbody></table>`;
+  return html;
 }
 
 // -------------------------
+// ICS parsing & Próximos partidos
 // -------------------------
-// ICS parsing & "Próximos partidos"
-// -------------------------
-
-/**
- * Unfold ICS lines (join folded lines that start with space or tab)
- */
 function unfoldICSLines(icsText) {
   return icsText.replace(/\r?\n[ \t]/g, "");
 }
 
-/**
- * Parse an ICS datetime or date token into a JS Date.
- * Handles:
- *  - DTSTART:20251125T120000
- *  - DTSTART;TZID=Europe/Madrid:20251125T120000
- *  - DTSTART;VALUE=DATE:20251125  (all-day)
- *
- * Returns { date: Date, allDay: boolean } or null on failure.
- */
 function parseICSDateToken(token, value) {
-  // token example: DTSTART;TZID=Europe/Madrid
   const isAllDay = /VALUE=DATE/i.test(token);
-  const tzMatch = token.match(/TZID=([^;:]+)/i);
-  const tzid = tzMatch ? tzMatch[1] : null;
-
-  // value examples: 20251125T120000 or 20251125
   const v = (value || "").trim();
-
   if (!v) return null;
 
   if (isAllDay || /^\d{8}$/.test(v)) {
-    // all-day date (YYYYMMDD)
     const yyyy = v.slice(0, 4);
     const mm = v.slice(4, 6);
     const dd = v.slice(6, 8);
-    // Create a Date at local midnight for that day
     return { date: new Date(`${yyyy}-${mm}-${dd}T00:00:00`), allDay: true };
   }
 
-  // datetime YYYYMMDDTHHMMSS or YYYYMMDDTHHMM
   const m = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?$/);
-  if (!m) {
-    // try without seconds
-    const m2 = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})$/);
-    if (m2) {
-      const [_, yyyy, mm, dd, hh, min] = m2;
-      return { date: new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:00`), allDay: false };
-    }
-    return null;
+  if (m) {
+    const [_, yyyy, mm, dd, hh, min, sec] = m;
+    return { date: new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:${sec || "00"}`), allDay: false };
   }
-  const [_, yyyy, mm, dd, hh, min, sec] = m;
-  const seconds = sec || "00";
-  // Note: we construct an ISO string without timezone so Node will interpret it as local time.
-  // It's acceptable for display; if you need strict TZ handling, adapt using Intl with ICS TZ.
-  return { date: new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:${seconds}`), allDay: false };
+
+  const m2 = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})$/);
+  if (m2) {
+    const [_, yyyy, mm, dd, hh, min] = m2;
+    return { date: new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:00`), allDay: false };
+  }
+
+  return null;
 }
 
-/**
- * Parse ICS text and return array of events:
- * { summary, location, description, start: Date, endExclusive: Date|null, endReal: Date|null, allDay: boolean }
- */
+function decodeICSText(s) {
+  if (!s) return "";
+  return s.replace(/\\n/g, "\n").replace(/\\,/g, ",").replace(/\\;/g, ";").trim();
+}
+
 function parseICS(icsText) {
   const txt = unfoldICSLines(icsText || "");
   const lines = txt.split(/\r?\n/);
@@ -286,73 +262,46 @@ function parseICS(icsText) {
   let inEvent = false;
   let cur = null;
 
-  for (let raw of lines) {
-    if (!raw) continue;
-    const line = raw;
-
+  for (const line of lines) {
     if (/^BEGIN:VEVENT/i.test(line)) {
       inEvent = true;
-      cur = { summary: "", location: "", description: "", start: null, endExclusive: null, endReal: null, allDay: false };
+      cur = { summary: "", location: "", description: "", start: null, end: null, allDay: false };
       continue;
     }
     if (/^END:VEVENT/i.test(line)) {
       inEvent = false;
       if (cur && cur.start) {
-        // Calcular endReal para eventos all-day:
-        if (cur.allDay) {
-          if (cur.endExclusive) {
-            // DTEND es exclusivo → el último día real es endExclusive - 1 día
-            cur.endReal = new Date(cur.endExclusive.getTime() - 24 * 3600 * 1000);
-          } else {
-            // Sin DTEND → evento de 1 día
-            cur.endReal = new Date(cur.start.getTime());
-          }
-        } else {
-          // Para eventos con hora, no definimos endReal
-          cur.endReal = null;
-        }
+        if (!cur.end && cur.allDay) cur.end = new Date(cur.start.getTime() + 24 * 3600 * 1000);
         events.push(cur);
       }
       cur = null;
       continue;
     }
-
     if (!inEvent || !cur) continue;
 
-    // key may contain params: e.g. DTSTART;TZID=Europe/Madrid:20251125T120000
     const idx = line.indexOf(":");
     if (idx === -1) continue;
     const key = line.slice(0, idx);
     const val = line.slice(idx + 1);
 
     if (/^DTSTART/i.test(key)) {
-      const parsed = parseICSDateToken(key, val);
-      if (parsed) {
-        cur.start = parsed.date;
-        cur.allDay = parsed.allDay;
-      }
+      const r = parseICSDateToken(key, val);
+      if (r) { cur.start = r.date; cur.allDay = r.allDay; }
       continue;
     }
-
     if (/^DTEND/i.test(key)) {
-      const parsed = parseICSDateToken(key, val);
-      if (parsed) {
-        // Guardamos como endExclusive para respetar la semántica ICS
-        cur.endExclusive = parsed.date;
-      }
+      const r = parseICSDateToken(key, val);
+      if (r) cur.end = r.date;
       continue;
     }
-
     if (/^SUMMARY/i.test(key)) {
       cur.summary = decodeICSText(val);
       continue;
     }
-
     if (/^LOCATION/i.test(key)) {
       cur.location = decodeICSText(val);
       continue;
     }
-
     if (/^DESCRIPTION/i.test(key)) {
       cur.description = decodeICSText(val);
       continue;
@@ -362,17 +311,6 @@ function parseICS(icsText) {
   return events;
 }
 
-function decodeICSText(s) {
-  if (!s) return "";
-  // Unescape basic ICS escapes
-  return s.replace(/\\n/g, "\n").replace(/\\, /g, ", ").replace(/\\,/g, ",").replace(/\\;/g, ";").trim();
-}
-
-/**
- * getProximosPartidos: recibe el contenido .ics (string) y devuelve HTML
- * - selecciona partidos en los siguientes 7 días (desde ahora)
- * - si no hay ninguno en 7 días, devuelve los 2 próximos partidos futuros
- */
 function getProximosPartidosFromICS(icsText) {
   try {
     const events = parseICS(icsText)
@@ -382,39 +320,31 @@ function getProximosPartidosFromICS(icsText) {
     const now = new Date();
     const weekAhead = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
 
-    // futuros ( >= now )
-    const future = events.filter(e => e.start.getTime() >= now.getTime());
+    const future = events.filter(e => e.start >= now);
+    let selected = future.filter(e => e.start <= weekAhead);
 
-    // partidos en próximos 7 días
-    const next7 = future.filter(e => e.start.getTime() <= weekAhead.getTime());
-
-    let selected = next7;
-    if (!selected || !selected.length) {
-      // tomar los 2 siguientes futuros (si existen)
-      selected = future.slice(0, 2);
-    }
-
-    if (!selected || !selected.length) return "<p>No hay partidos próximos.</p>";
+    if (!selected.length) selected = future.slice(0, 2);
+    if (!selected.length) return "<p>No hay partidos próximos.</p>";
 
     return selected.map(e => {
-      // Construir fecha o rango legible en es-ES
-      let fechaHtml = "";
+      const d0 = e.start;
+      const d1 = e.end;
 
-      if (e.allDay && e.endReal && e.endReal instanceof Date && e.endReal.getTime() !== e.start.getTime()) {
-        // Evento multi-día: mostrar rango desde start hasta endReal
-        const f1 = e.start.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
-        const f2 = e.endReal.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
-        fechaHtml = `${escapeHtml(f1)} — ${escapeHtml(f2)}`;
+      let fechaTxt = "";
+      if (e.allDay && d1 && d1 > d0) {
+        // Ej: "vie 28 - dom 30 nov"
+        const f0 = d0.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+        const f1 = d1.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+        fechaTxt = `${f0} — ${f1}`;
       } else {
-        // Evento con hora o all-day de un solo día
-        const f1 = e.start.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
-        const hora = e.allDay ? "" : e.start.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-        fechaHtml = hora ? `${escapeHtml(f1)} — ${escapeHtml(hora)}` : escapeHtml(f1);
+        const f0 = d0.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+        const h0 = e.allDay ? "" : d0.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+        fechaTxt = h0 ? `${f0} — ${h0}` : f0;
       }
 
       return `
 <div class="partido">
-  <div class="fecha">${fechaHtml}</div>
+  <div class="fecha">${escapeHtml(fechaTxt)}</div>
   <div class="vs">${escapeHtml(e.summary || "Partido")}</div>
   ${e.location ? `<div class="lugar">${escapeHtml(e.location)}</div>` : ""}
   ${e.description ? `<div class="desc">${escapeHtml(e.description)}</div>` : ""}
@@ -422,77 +352,65 @@ function getProximosPartidosFromICS(icsText) {
     }).join("\n");
 
   } catch (err) {
-    return `<p>Error leyendo calendario: ${escapeHtml(String(err.message || err))}</p>`;
+    return `<p>Error leyendo calendario: ${escapeHtml(String(err))}</p>`;
   }
 }
 
 // -------------------------
-// GENERAR PÁGINA INDIVIDUAL
+function escapeHtml(s) {
+  return (s || "").replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 // -------------------------
-async function generateTeamPage({ team, category, competition, urlPath, slug, iconPath, federadoInfo, filename }) {
+// Página individual
+// -------------------------
+async function generateTeamPage({
+  team, category, competition, urlPath, slug,
+  iconPath, federadoInfo, imdClasifMap
+}) {
   const title = `${team} – ${category} (${competition})`;
   const webcalUrl = `webcal://${BASE_WEBCAL_HOST}/${BASE_REPO_PATH}/${encodeURI(urlPath)}`;
 
-  // URLs oficiales (si existen)
+  // URLs oficiales federación
   let rankingUrl = "";
   let calendarOfficialUrl = "";
-  if (federadoInfo && federadoInfo.tournament && federadoInfo.group) {
-    const t = federadoInfo.tournament;
-    const g = federadoInfo.group;
-    if (Number(g) !== 0) {
-      rankingUrl = `https://favoley.es/es/tournament/${t}/ranking/${g}`;
-      calendarOfficialUrl = `https://favoley.es/es/tournament/${t}/calendar/${g}/all`;
+  if (competition === "FEDERADO" && federadoInfo) {
+    const { tournament, group } = federadoInfo;
+    if (group && Number(group) !== 0) {
+      rankingUrl = `https://favoley.es/es/tournament/${tournament}/ranking/${group}`;
+      calendarOfficialUrl = `https://favoley.es/es/tournament/${tournament}/calendar/${group}/all`;
     } else {
-      calendarOfficialUrl = `https://favoley.es/es/tournament/${t}/calendar/`;
+      calendarOfficialUrl = `https://favoley.es/es/tournament/${tournament}/calendar/`;
     }
   }
 
-  // ================================
-  // CLASIFICACIÓN (placeholder real)
-  // ================================
+  // ------------- Clasificación -------------
   let clasificacionHtml = "<p>Cargando…</p>";
 
-  if (competition === "FEDERADO" && federadoInfo && federadoInfo.group !== 0) {
+  if (competition === "FEDERADO" && federadoInfo) {
     try {
-      const ranking = await fetchFederadoRanking(
-        federadoInfo.tournament,
-        federadoInfo.group
-      );
+      const ranking = await fetchFederadoRanking(federadoInfo.tournament, federadoInfo.group);
       if (ranking) clasificacionHtml = buildClasificacionHTML(ranking);
     } catch (err) {
-      console.warn("⚠️ Error obteniendo clasificación:", err);
+      clasificacionHtml = "<p>Error cargando clasificación federada.</p>";
     }
+
+  } else if (competition === "IMD") {
+    const key = `imd_${category}_${team}`.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    const rows = imdClasifMap && imdClasifMap[key];
+    clasificacionHtml = rows ? buildClasificacionIMD(rows) : "<p>No disponible para esta categoría.</p>";
+
   } else {
-    clasificacionHtml = "<p>No disponible para competición IMD.</p>";
+    clasificacionHtml = "<p>No disponible.</p>";
   }
 
-  // ================================
-  // PRÓXIMOS PARTIDOS (real)
-  // ================================
-  let proximosHtml = "<p>No hay partidos próximos.</p>";
-  if (filename) {
-    try {
-      const icsPath = path.join(CALENDAR_DIR, filename);
-      if (fs.existsSync(icsPath)) {
-        const icsText = fs.readFileSync(icsPath, "utf8");
-        const htmlBlock = getProximosPartidosFromICS(icsText);
-        if (htmlBlock && htmlBlock.trim()) proximosHtml = htmlBlock;
-      } else {
-        proximosHtml = "<p>Calendario no disponible (fichero no encontrado).</p>";
-      }
-    } catch (err) {
-      proximosHtml = `<p>Error leyendo .ics: ${escapeHtml(String(err.message || err))}</p>`;
-    }
-  } else {
-    proximosHtml = "<p>Calendario no especificado.</p>";
-  }
+  // ------------- Próximos partidos -------------
+  const icsText = fs.readFileSync(path.join(CALENDAR_DIR, `${slug}.ics`), "utf8");
+  const proximosHtml = getProximosPartidosFromICS(icsText);
 
-  // URLs oficiales small link
-  const smallLinksHtml = calendarOfficialUrl ? `<div class="small-links"><a href="${calendarOfficialUrl}" target="_blank">Calendario oficial</a></div>` : "";
-
-  // ================================
-  // CARGAR PLANTILLA
-  // ================================
+  // ------------- Plantilla equipo.html -------------
   const templatePath = path.join(TEMPLATE_DIR, "equipo.html");
   let tpl = fs.readFileSync(templatePath, "utf8");
 
@@ -504,38 +422,23 @@ async function generateTeamPage({ team, category, competition, urlPath, slug, ic
     .replace(/{{icon}}/g, iconPath)
     .replace(/{{webcal}}/g, webcalUrl)
     .replace(/{{clasificacion}}/g, clasificacionHtml)
-    .replace(/{{proximosPartidos}}/g, proximosHtml)
-    .replace(/{{smallLinks}}/g, smallLinksHtml);
+    .replace(/{{proximosPartidos}}/g, proximosHtml);
 
-  // generar archivo HTML
-  const outDir = EQUIPOS_DIR;
-  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  if (!fs.existsSync(EQUIPOS_DIR))
+    fs.mkdirSync(EQUIPOS_DIR, { recursive: true });
 
-  const outPath = path.join(outDir, `${slug}.html`);
-  fs.writeFileSync(outPath, tpl, "utf8");
+  fs.writeFileSync(path.join(EQUIPOS_DIR, `${slug}.html`), tpl, "utf8");
 }
 
 // -------------------------
-// Escapar HTML simple
+// Generar HTML principal
 // -------------------------
-function escapeHtml(s) {
-  if (!s) return "";
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+async function generateHTML(calendars, federadoMap, imdClasifMap) {
+  if (!fs.existsSync(EQUIPOS_DIR))
+    fs.mkdirSync(EQUIPOS_DIR, { recursive: true });
 
-// -------------------------
-// Generar HTML principal (index)
- // -------------------------
-async function generateHTML(calendars, federadoMap) {
-  // Asegurar carpeta equipos existencia (vacía/creada)
-  if (!fs.existsSync(EQUIPOS_DIR)) fs.mkdirSync(EQUIPOS_DIR, { recursive: true });
-
-  let html = `<!DOCTYPE html>
+  let html = `
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -561,37 +464,26 @@ async function generateHTML(calendars, federadoMap) {
 
       teams.sort(sortTeams);
 
-      for (const { team, path: filePath, urlPath, filename, slug } of teams) {
-        const icon = getIconForTeam(team);
+      for (const t of teams) {
+        const icon = getIconForTeam(t.team);
+        const key = t.slug;
+        const federadoInfo = federadoMap ? federadoMap[key] : null;
 
-        // link to team page (opción A: slug = filename without .ics)
-        const equipoPage = `equipos/${slug}.html`;
-
-        // buscar mapping federado por clave = filename sin .ics
-        const key = slug;
-        const federadoInfo = (federadoMap && federadoMap[key]) ? federadoMap[key] : null;
-
-        // 🔍 DEBUG: comprobar si federadoInfo existe
-        if (comp === "FEDERADO" && !federadoInfo) {
-          console.log(`ℹ️ federado_ids.json: no mapping for key="${key}" (file=${filename})`);
-        }
-
-        // generar la página individual también
         await generateTeamPage({
-          team: team,
+          team: t.team,
           category,
           competition: comp,
-          urlPath,
-          slug,
+          urlPath: t.urlPath,
+          slug: t.slug,
           iconPath: icon,
           federadoInfo,
-          filename // <<< ahora pasamos filename para leer el .ics
+          imdClasifMap
         });
 
         html += `
 <li class="team-item">
-  <img class="team-icon" src="${icon}" alt="${escapeHtml(team)}" />
-  <a class="team-link" href="${equipoPage}">${escapeHtml(team)}</a>
+  <img class="team-icon" src="${icon}" alt="${escapeHtml(t.team)}" />
+  <a class="team-link" href="equipos/${t.slug}.html">${escapeHtml(t.team)}</a>
 </li>`;
       }
 
@@ -611,13 +503,13 @@ async function generateHTML(calendars, federadoMap) {
 }
 
 // -------------------------
-// MAIN (async)
+// MAIN
 // -------------------------
 (async function main() {
   try {
-    console.log("📋 Generando index.html con nombres normalizados y páginas /equipos/ (integrando federado_ids.json) ...");
+    console.log("📋 Generando index.html con clasificaciones (FEDERADO + IMD)...");
 
-    // intentar cargar federado_ids.json si existe
+    // federado_ids.json
     let federadoMap = null;
     const federadoPath = path.join(process.cwd(), "federado_ids.json");
     if (fs.existsSync(federadoPath)) {
@@ -625,15 +517,24 @@ async function generateHTML(calendars, federadoMap) {
         federadoMap = JSON.parse(fs.readFileSync(federadoPath, "utf8"));
         console.log(`ℹ️ federado_ids.json cargado (${Object.keys(federadoMap).length} claves)`);
       } catch (e) {
-        console.warn("⚠️ No se pudo parsear federado_ids.json:", e.message);
-        federadoMap = null;
+        console.warn("⚠️ Error leyendo federado_ids.json:", e.message);
       }
-    } else {
-      console.log("ℹ️ federado_ids.json no encontrado — se generarán páginas sin enlaces a clasificación oficial.");
+    }
+
+    // Cargar clasificaciones IMD
+    let imdClasifMap = null;
+    const imdClasifPath = path.join(CALENDAR_DIR, "imd_clasificaciones.json");
+    if (fs.existsSync(imdClasifPath)) {
+      try {
+        imdClasifMap = JSON.parse(fs.readFileSync(imdClasifPath, "utf8"));
+        console.log(`ℹ️ clasificaciones IMD cargadas (${Object.keys(imdClasifMap).length} equipos)`);
+      } catch (e) {
+        console.warn("⚠️ Error leyendo imd_clasificaciones.json:", e.message);
+      }
     }
 
     const calendars = collectCalendars();
-    await generateHTML(calendars, federadoMap);
+    await generateHTML(calendars, federadoMap, imdClasifMap);
 
   } catch (err) {
     console.error("❌ ERROR GENERAL:", err);
