@@ -276,7 +276,7 @@ function parseICSDateToken(token, value) {
 
 /**
  * Parse ICS text and return array of events:
- * { summary, location, description, start: Date, end: Date|null, allDay: boolean }
+ * { summary, location, description, start: Date, endExclusive: Date|null, endReal: Date|null, allDay: boolean }
  */
 function parseICS(icsText) {
   const txt = unfoldICSLines(icsText || "");
@@ -292,15 +292,24 @@ function parseICS(icsText) {
 
     if (/^BEGIN:VEVENT/i.test(line)) {
       inEvent = true;
-      cur = { summary: "", location: "", description: "", start: null, end: null, allDay: false };
+      cur = { summary: "", location: "", description: "", start: null, endExclusive: null, endReal: null, allDay: false };
       continue;
     }
     if (/^END:VEVENT/i.test(line)) {
       inEvent = false;
       if (cur && cur.start) {
-        // If end missing and allDay, set end = start + 1 day
-        if (!cur.end && cur.allDay) {
-          cur.end = new Date(cur.start.getTime() + 24 * 3600 * 1000);
+        // Calcular endReal para eventos all-day:
+        if (cur.allDay) {
+          if (cur.endExclusive) {
+            // DTEND es exclusivo → el último día real es endExclusive - 1 día
+            cur.endReal = new Date(cur.endExclusive.getTime() - 24 * 3600 * 1000);
+          } else {
+            // Sin DTEND → evento de 1 día
+            cur.endReal = new Date(cur.start.getTime());
+          }
+        } else {
+          // Para eventos con hora, no definimos endReal
+          cur.endReal = null;
         }
         events.push(cur);
       }
@@ -328,7 +337,8 @@ function parseICS(icsText) {
     if (/^DTEND/i.test(key)) {
       const parsed = parseICSDateToken(key, val);
       if (parsed) {
-        cur.end = parsed.date;
+        // Guardamos como endExclusive para respetar la semántica ICS
+        cur.endExclusive = parsed.date;
       }
       continue;
     }
@@ -387,18 +397,24 @@ function getProximosPartidosFromICS(icsText) {
     if (!selected || !selected.length) return "<p>No hay partidos próximos.</p>";
 
     return selected.map(e => {
-      const d = e.start;
-      // formatear fecha como "Sáb 22 — 11:00" en es-ES
-      const fecha = d.toLocaleDateString("es-ES", {
-        weekday: "short",
-        day: "numeric",
-        month: "short"
-      });
-      const hora = e.allDay ? "" : d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+      // Construir fecha o rango legible en es-ES
+      let fechaHtml = "";
+
+      if (e.allDay && e.endReal && e.endReal instanceof Date && e.endReal.getTime() !== e.start.getTime()) {
+        // Evento multi-día: mostrar rango desde start hasta endReal
+        const f1 = e.start.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+        const f2 = e.endReal.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+        fechaHtml = `${escapeHtml(f1)} — ${escapeHtml(f2)}`;
+      } else {
+        // Evento con hora o all-day de un solo día
+        const f1 = e.start.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+        const hora = e.allDay ? "" : e.start.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+        fechaHtml = hora ? `${escapeHtml(f1)} — ${escapeHtml(hora)}` : escapeHtml(f1);
+      }
 
       return `
 <div class="partido">
-  <div class="fecha">${escapeHtml(fecha)}${hora ? " — " + escapeHtml(hora) : ""}</div>
+  <div class="fecha">${fechaHtml}</div>
   <div class="vs">${escapeHtml(e.summary || "Partido")}</div>
   ${e.location ? `<div class="lugar">${escapeHtml(e.location)}</div>` : ""}
   ${e.description ? `<div class="desc">${escapeHtml(e.description)}</div>` : ""}
