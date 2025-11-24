@@ -273,6 +273,100 @@ async function parseIMDClasificacion(driver) {
     return [];
   }
 }
+// --------------------
+// IMD: parsear clasificación del equipo mostrado actualmente en el driver
+// --------------------
+async function parseIMDClasificacion(driver) {
+  try {
+    // 1) clicar la pestaña "Consulta de Clasificaciones" (ya existe desde el inicio)
+    try {
+      const tabClasif = await driver.findElement(By.id("tab_opc2"));
+      await tabClasif.click();
+    } catch (err) {
+      // si no existe, continuar; muchas versiones tienen el tab por defecto
+    }
+
+    // 2) esperar a que aparezca el select #selprov y forzar "Resultados PROVISIONALES"
+    try {
+      await driver.wait(until.elementLocated(By.id("selprov")), 7000);
+      // Forzamos valor y disparamos la función onchange para que cargue la tabla (más fiable que sendKeys)
+      await driver.executeScript(`
+        const s = document.getElementById('selprov');
+        if (s) {
+          s.value = '1';
+          if (typeof cambioprov === 'function') try { cambioprov(); } catch(e) {}
+        }
+      `);
+    } catch (err) {
+      // No encontramos el select en tiempo; devolvemos vacío
+      return [];
+    }
+
+    // 3) esperar a que la tabla de clasificacion dentro de #tab2 esté presente
+    await driver.wait(until.elementLocated(By.css("#tab2 table.tt")), 8000);
+    const table = await driver.findElement(By.css("#tab2 table.tt"));
+    const rows = await table.findElements(By.css("tbody > tr"));
+
+    const clasif = [];
+
+    // La primera fila es cabecera 'Resultados Provisionales' y segunda cabecera de columnas,
+    // por eso iteramos y buscamos filas con suficientes columnas numéricas.
+    for (const row of rows) {
+      // extraer celdas
+      const cols = await row.findElements(By.css("td"));
+      // filas de datos reales suelen tener >= 11 celdas (según HTML que compartiste)
+      if (cols.length < 6) continue;
+
+      const vals = await Promise.all(cols.map(c => c.getText().then(t => t.trim())));
+
+      // Normalizar: la primera celda tiene "1 - NOMBRE EQUIPO" → separar puesto y equipo
+      let puesto = "";
+      let equipo = vals[0] || "";
+      const m = equipo.match(/^\s*([0-9]+)\s*-\s*(.+)$/);
+      if (m) {
+        puesto = m[1];
+        equipo = m[2];
+      } else {
+        // si no tiene el formato, dejar puesto vacío y equipo como está
+        equipo = equipo.replace(/^\s*-\s*/, "").trim();
+      }
+
+      // Mapeo aproximado basado en el HTML que aportaste:
+      // vals indices: 0=Equipo,1=PJ,2=PG,3=PE,4=PP,5=PNP,6=JF,7=JC,8=TF,9=TC,10=Puntos
+      const pj = vals[1] || "";
+      const pg = vals[2] || "";
+      const pe = vals[3] || "";
+      const pp = vals[4] || "";
+      const pnp = vals[5] || "";
+      const jf = vals[6] || "";
+      const jc = vals[7] || "";
+      const tf = vals[8] || "";
+      const tc = vals[9] || "";
+      const puntos = vals[10] || "";
+
+      clasif.push({
+        puesto,
+        equipo,
+        pj,
+        pg,
+        pe,
+        pp,
+        pnp,
+        jf,
+        jc,
+        tf,
+        tc,
+        puntos
+      });
+    }
+
+    return clasif;
+  } catch (err) {
+    // no romper el scraper, devolver vacío
+    try { log(`⚠️ parseIMDClasificacion error: ${err && err.message ? err.message : err}`); } catch {}
+    return [];
+  }
+}
 
 
 // --------------------
@@ -335,7 +429,7 @@ async function parseIMDClasificacion(driver) {
       const events = await parseTeamCalendar(driver, nombre);
       writeICS(nombre, categoria, events);
       log(`✅ ${nombre} (${categoria}): ${events.length} partidos.`);
-      // --- Obtener clasificación IMD para este equipo ---
+     // --- Obtener clasificación IMD para este equipo ---
 try {
   const clasif = await parseIMDClasificacion(driver);
 
