@@ -1,6 +1,5 @@
 // scripts/update_calendars_imd_multi.js
-// Genera un calendario .ics por cada equipo del C.D. LAS FLORES desde la web del IMD Sevilla
-// y al final genera automáticamente el index.html
+// Genera calendarios IMD + clasificaciones IMD con debug paso a paso
 
 const fs = require("fs");
 const path = require("path");
@@ -32,13 +31,15 @@ function normalize(s) {
   return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 }
 
-// --------------------
-// ICS Helpers
-// --------------------
+// --------------------------------------------------------
+// ----------- ICS HELPERS -------------------------------
+// --------------------------------------------------------
+
 function fmtICSDateTimeTZID(dt) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
 }
+
 function fmtICSDate(d) {
   const Y = d.getUTCFullYear();
   const M = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -49,6 +50,7 @@ function fmtICSDate(d) {
 function writeICS(teamName, category, events) {
   const safeName = `${category}_${teamName}`.toLowerCase().replace(/[^a-z0-9]+/g, "_");
   const filename = `imd_${safeName}.ics`;
+
   let ics = `BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
@@ -78,13 +80,15 @@ END:VEVENT
   }
 
   ics += "END:VCALENDAR\n";
+
   fs.writeFileSync(path.join(OUTPUT_DIR, filename), ics);
   log(`✅ ${filename} (${events.length} eventos)`);
 }
 
-// --------------------
-// Scraping Helpers
-// --------------------
+// --------------------------------------------------------
+// ----------- EXTRACCIÓN CALENDARIO ----------------------
+// --------------------------------------------------------
+
 async function parseTeamCalendar(driver, teamName) {
   const TEAM_EXACT = teamName.trim().toUpperCase();
   const allEvents = [];
@@ -110,14 +114,17 @@ async function parseTeamCalendar(driver, teamName) {
       const match = fecha.match(/(\d{2})\/(\d{2})\/(\d{4})/);
       if (!match) continue;
       const [_, dd, MM, yyyy] = match;
+
       const time = hora.match(/(\d{2}):(\d{2})/);
       const start = new Date(`${yyyy}-${MM}-${dd}T${time ? time[0] : "00:00"}:00`);
 
       const summary = `${local} vs ${visitante} (IMD)`;
       const descriptionParts = [];
+
       if (resultado && resultado !== "-") descriptionParts.push(`Resultado: ${resultado}`);
       if (obsEncuentro && obsEncuentro !== "-") descriptionParts.push(`Obs. Encuentro: ${obsEncuentro}`);
       if (obsResultado && obsResultado !== "-") descriptionParts.push(`Obs. Resultado: ${obsResultado}`);
+
       const description = descriptionParts.join(" | ");
 
       allEvents.push({
@@ -134,250 +141,65 @@ async function parseTeamCalendar(driver, teamName) {
   return allEvents;
 }
 
-// --------------------
-// IMD: parsear clasificación del equipo mostrado actualmente en el driver (versión robusta)
-// --------------------
+// --------------------------------------------------------
+// ----------- PARSE CLASIFICACIÓN IMD --------------------
+// --------------------------------------------------------
+
 async function parseIMDClasificacion(driver) {
-  try {
-    // 1) clicar la pestaña "Consulta de Clasificaciones" (si existe)
-    try {
-      const tabClasif = await driver.findElement(By.id("tab_opc2"));
-      await tabClasif.click();
-    } catch (err) {
-      // no fatal: puede no existir la pestaña explícita en alguna versión
-    }
+  log("      ↪ Buscando tabla de clasificación…");
 
-    // 2) esperar el select #selprov (si existe) y forzar "Resultados PROVISIONALES"
-    try {
-      await driver.wait(until.elementLocated(By.id("selprov")), 7000);
-      // Intentamos forzar la opción y disparar la función onchange varias veces si hace falta
-      await driver.executeScript(`
-        const s = document.getElementById('selprov');
-        if (s) {
-          try { s.value = '1'; } catch(e){}
-          if (typeof cambioprov === 'function') try { cambioprov(); } catch(e) {}
-        }
-      `);
-      // pequeña espera para que la página procese la actualización
-      await driver.sleep(800);
-      // por si no se actualiza, pruebo también sendKeys
-      try {
-        const sel = await driver.findElement(By.id("selprov"));
-        await sel.sendKeys("Resultados PROVISIONALES");
-        await driver.sleep(600);
-      } catch (e) {}
-    } catch (err) {
-      // si no hay select, seguimos: la tabla puede cargarse sin él
-    }
+  const table = await driver.wait(
+    until.elementLocated(By.css("#tab1 table.tt tbody")),
+    8000
+  );
 
-    // 3) Espera flexible por la tabla de clasificación:
-    // buscamos en estos contenedores posibles: #tab2, #tab1, o cualquier table.tt
-    const selectors = ["#tab2 table.tt", "#tab1 table.tt", "table.tt"];
-    let tableEl = null;
-    for (const sel of selectors) {
-      try {
-        await driver.wait(until.elementLocated(By.css(sel)), 5000);
-        const cand = await driver.findElements(By.css(sel));
-        if (cand && cand.length) {
-          // elegir la primera que tenga >1 filas (evitar cabeceras vacías)
-          for (const t of cand) {
-            try {
-              const rows = await t.findElements(By.css("tbody > tr"));
-              if (rows && rows.length >= 2) { // >=2 porque la primera puede ser título
-                tableEl = t;
-                break;
-              }
-            } catch (e) {}
-          }
-          if (tableEl) break;
-        }
-      } catch (e) {
-        // no encontrado con este selector, pruebo el siguiente
-      }
-    }
+  const rows = await table.findElements(By.css("tr"));
+  if (!rows.length) return [];
 
-    // Si aun así no encontramos, esperamos un poco más buscando cualquier table.tt visible
-    if (!tableEl) {
-      try {
-        await driver.sleep(1200);
-        const allTables = await driver.findElements(By.css("table.tt"));
-        for (const t of allTables) {
-          try {
-            const rows = await t.findElements(By.css("tbody > tr"));
-            if (rows && rows.length >= 2) { tableEl = t; break; }
-          } catch (e) {}
-        }
-      } catch (e) {}
-    }
+  const out = [];
 
-    // Si no hay tabla, guardamos snapshot para debugging y devolvemos []
-    if (!tableEl) {
-      try {
-        const html = await driver.getPageSource();
-        const snap = path.join(DEBUG_DIR, `imd_clasif_snapshot_${Date.now()}.html`);
-        try { fs.writeFileSync(snap, html, "utf8"); } catch (e) {}
-        log(`⚠️ parseIMDClasificacion: no se encontró table.tt — snapshot guardado: ${snap}`);
-      } catch (e) {}
-      return [];
-    }
+  for (let i = 1; i < rows.length; i++) {
+    const cols = await rows[i].findElements(By.css("td"));
+    if (cols.length < 11) continue;
 
-    // 4) parsear filas de la tabla encontrada
-    const rows = await tableEl.findElements(By.css("tbody > tr"));
-    const clasif = [];
+    const vals = await Promise.all(cols.map((c) => c.getText().then((t) => t.trim())));
 
-    for (const row of rows) {
-      try {
-        const cols = await row.findElements(By.css("td"));
-        if (!cols || cols.length < 2) continue;
+    const [
+      equipo,
+      pj,
+      pg,
+      pe,
+      pp,
+      pnp,
+      jf,
+      jc,
+      tf,
+      tc,
+      puntos
+    ] = vals;
 
-        const vals = await Promise.all(cols.map(c => c.getText().then(t => t.trim())));
-
-        // Normalizar primera celda: "1 - NOMBRE" o " 1 - NOMBRE"
-        let puesto = "";
-        let equipoRaw = vals[0] || "";
-        const m = equipoRaw.match(/^\s*([0-9]+)\s*-\s*(.+)$/);
-        let equipo = equipoRaw;
-        if (m) { puesto = m[1]; equipo = m[2]; }
-        else {
-          // si la celda ya es solo el nombre (sin número), tratar de extraer nombre
-          equipo = equipoRaw.replace(/^\s*-\s*/, "").trim();
-        }
-
-        // Mapeo basado en el HTML observado:
-        // [0]=Equipo,1=PJ,2=PG,3=PE,4=PP,5=PNP,6=JF,7=JC,8=TF,9=TC,10=Puntos
-        const pj = vals[1] || "";
-        const pg = vals[2] || "";
-        const pe = vals[3] || "";
-        const pp = vals[4] || "";
-        const pnp = vals[5] || "";
-        const jf = vals[6] || "";
-        const jc = vals[7] || "";
-        const tf = vals[8] || "";
-        const tc = vals[9] || "";
-        const puntos = vals[10] || "";
-
-        clasif.push({
-          puesto,
-          equipo,
-          pj, pg, pe, pp, pnp, jf, jc, tf, tc, puntos
-        });
-      } catch (e) {
-        // ignore single row parse error
-      }
-    }
-
-    return clasif;
-
-  } catch (err) {
-    try { log(`⚠️ parseIMDClasificacion error general: ${err && err.message ? err.message : err}`); } catch {}
-    return [];
+    out.push({
+      team: equipo.replace(/^\d+\s*-\s*/, ""),
+      pj, pg, pe, pp, pnp, jf, jc, tf, tc, puntos
+    });
   }
-}
-// --------------------
-// IMD: parsear clasificación del equipo mostrado actualmente en el driver
-// --------------------
-async function parseIMDClasificacion(driver) {
-  try {
-    // 1) clicar la pestaña "Consulta de Clasificaciones" (ya existe desde el inicio)
-    try {
-      const tabClasif = await driver.findElement(By.id("tab_opc2"));
-      await tabClasif.click();
-    } catch (err) {
-      // si no existe, continuar; muchas versiones tienen el tab por defecto
-    }
 
-    // 2) esperar a que aparezca el select #selprov y forzar "Resultados PROVISIONALES"
-    try {
-      await driver.wait(until.elementLocated(By.id("selprov")), 7000);
-      // Forzamos valor y disparamos la función onchange para que cargue la tabla (más fiable que sendKeys)
-      await driver.executeScript(`
-        const s = document.getElementById('selprov');
-        if (s) {
-          s.value = '1';
-          if (typeof cambioprov === 'function') try { cambioprov(); } catch(e) {}
-        }
-      `);
-    } catch (err) {
-      // No encontramos el select en tiempo; devolvemos vacío
-      return [];
-    }
+  log(`      ✔ Tabla IMD: ${out.length} filas`);
 
-    // 3) esperar a que la tabla de clasificacion dentro de #tab2 esté presente
-    await driver.wait(until.elementLocated(By.css("#tab2 table.tt")), 8000);
-    const table = await driver.findElement(By.css("#tab2 table.tt"));
-    const rows = await table.findElements(By.css("tbody > tr"));
-
-    const clasif = [];
-
-    // La primera fila es cabecera 'Resultados Provisionales' y segunda cabecera de columnas,
-    // por eso iteramos y buscamos filas con suficientes columnas numéricas.
-    for (const row of rows) {
-      // extraer celdas
-      const cols = await row.findElements(By.css("td"));
-      // filas de datos reales suelen tener >= 11 celdas (según HTML que compartiste)
-      if (cols.length < 6) continue;
-
-      const vals = await Promise.all(cols.map(c => c.getText().then(t => t.trim())));
-
-      // Normalizar: la primera celda tiene "1 - NOMBRE EQUIPO" → separar puesto y equipo
-      let puesto = "";
-      let equipo = vals[0] || "";
-      const m = equipo.match(/^\s*([0-9]+)\s*-\s*(.+)$/);
-      if (m) {
-        puesto = m[1];
-        equipo = m[2];
-      } else {
-        // si no tiene el formato, dejar puesto vacío y equipo como está
-        equipo = equipo.replace(/^\s*-\s*/, "").trim();
-      }
-
-      // Mapeo aproximado basado en el HTML que aportaste:
-      // vals indices: 0=Equipo,1=PJ,2=PG,3=PE,4=PP,5=PNP,6=JF,7=JC,8=TF,9=TC,10=Puntos
-      const pj = vals[1] || "";
-      const pg = vals[2] || "";
-      const pe = vals[3] || "";
-      const pp = vals[4] || "";
-      const pnp = vals[5] || "";
-      const jf = vals[6] || "";
-      const jc = vals[7] || "";
-      const tf = vals[8] || "";
-      const tc = vals[9] || "";
-      const puntos = vals[10] || "";
-
-      clasif.push({
-        puesto,
-        equipo,
-        pj,
-        pg,
-        pe,
-        pp,
-        pnp,
-        jf,
-        jc,
-        tf,
-        tc,
-        puntos
-      });
-    }
-
-    return clasif;
-  } catch (err) {
-    // no romper el scraper, devolver vacío
-    try { log(`⚠️ parseIMDClasificacion error: ${err && err.message ? err.message : err}`); } catch {}
-    return [];
-  }
+  return out;
 }
 
+// --------------------------------------------------------
+// ----------- MAIN SCRIPT IMD ----------------------------
+// --------------------------------------------------------
 
-// --------------------
-// MAIN SCRIPT
-// --------------------
 (async () => {
   log("🌼 Iniciando generación de calendarios IMD para equipos LAS FLORES...");
 
   const tmpUserDir = fs.mkdtempSync(path.join(os.tmpdir(), "chrome-imd-"));
   const options = new chrome.Options()
     .addArguments("--headless=new", "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage", `--user-data-dir=${tmpUserDir}`);
+
   const driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
 
   try {
@@ -390,18 +212,20 @@ async function parseIMDClasificacion(driver) {
     await input.clear();
     await input.sendKeys(SEARCH_TERM, Key.ENTER);
     log(`🔎 Buscando '${SEARCH_TERM}'...`);
-    await driver.sleep(2000);
+    await driver.sleep(1500);
 
     await driver.wait(
       until.elementLocated(By.xpath("//table[contains(@class,'tt')]//td[contains(.,'Nº.Equipos')]")),
       20000
     );
+
     const tab1 = await driver.findElement(By.id("tab1"));
     const table = await tab1.findElement(By.css("table.tt"));
     const rows = await table.findElements(By.css("tbody > tr"));
     log(`📋 ${rows.length} filas encontradas en tabla de equipos.`);
 
     const equipos = [];
+
     for (const row of rows) {
       const cols = await row.findElements(By.css("td"));
       if (cols.length < 3) continue;
@@ -409,53 +233,133 @@ async function parseIMDClasificacion(driver) {
       const nombre = (await cols[0].getText()).trim().toUpperCase();
       const categoria = (await cols[2].getText()).trim().toUpperCase();
       if (nombre.includes("LAS FLORES")) {
-        const rowHtml = await row.getAttribute("outerHTML");
-        const match = rowHtml.match(/datosequipo\('([A-F0-9-]+)'\)/i);
+        const html = await row.getAttribute("outerHTML");
+        const match = html.match(/datosequipo\('([A-F0-9-]+)'\)/i);
         if (match) equipos.push({ id: match[1], nombre, categoria });
       }
     }
 
     log(`🌸 ${equipos.length} equipos LAS FLORES detectados.`);
 
+    // ==========================================================
+    // ================ BUCLE PRINCIPAL CON DEBUG ===============
+    // ==========================================================
+
     for (const { id, nombre, categoria } of equipos) {
       log(`\n➡️ Procesando ${nombre} (${categoria})...`);
-      await driver.executeScript(`datosequipo("${id}")`);
 
-      const selJor = await driver.wait(until.elementLocated(By.id("seljor")), 15000);
-      await driver.wait(until.elementIsVisible(selJor), 10000);
-      await selJor.sendKeys("Todas");
-      await driver.sleep(2000);
+      try {
+        // -------------------------------
+        // 1) Ejecutar datosequipo
+        // -------------------------------
+        await driver.executeScript(`datosequipo("${id}")`);
+        await driver.sleep(1000);
+        log("   ✔ datosequipo ejecutado");
 
-      const events = await parseTeamCalendar(driver, nombre);
-      writeICS(nombre, categoria, events);
-      log(`✅ ${nombre} (${categoria}): ${events.length} partidos.`);
-     // --- Obtener clasificación IMD para este equipo ---
-try {
-  const clasif = await parseIMDClasificacion(driver);
+        fs.writeFileSync(
+          path.join(DEBUG_DIR, `imd_after_datosequipo_${nombre.replace(/[^a-z0-9]+/gi, "_")}.html`),
+          await driver.getPageSource()
+        );
 
-  // construir clave única (coincidente con lo propuesto antes)
-  // usamos la forma: IMD_<CATEGORIA>_<NOMBRE>, todo en minúsculas y guiones bajos
-  const key = `IMD_${categoria}_${nombre}`.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+        // -------------------------------
+        // 2) Seleccionar jornadas
+        // -------------------------------
+        const selJor = await driver.wait(until.elementLocated(By.id("seljor")), 8000);
+        await driver.wait(until.elementIsVisible(selJor), 8000);
+        await selJor.sendKeys("Todas");
+        await driver.sleep(1000);
 
-  const clasifPath = path.join(OUTPUT_DIR, "imd_clasificaciones.json");
-  let clasifData = {};
-  if (fs.existsSync(clasifPath)) {
-    try { clasifData = JSON.parse(fs.readFileSync(clasifPath, "utf8")); } catch (e) { clasifData = {}; }
-  }
+        log("   ✔ Selector seljor OK");
 
-  clasifData[key] = clasif;
-  fs.writeFileSync(clasifPath, JSON.stringify(clasifData, null, 2), "utf8");
-  log(`✅ Clasificación IMD guardada: key=${key} (${clasif ? clasif.length : 0} filas)`);
-} catch (err) {
-  log(`⚠️ Error guardando clasificación IMD para ${nombre}: ${err && err.message ? err.message : err}`);
-}
+        fs.writeFileSync(
+          path.join(DEBUG_DIR, `imd_after_seljor_${nombre.replace(/[^a-z0-9]+/gi, "_")}.html`),
+          await driver.getPageSource()
+        );
 
+        // -------------------------------
+        // 3) Parsear calendario
+        // -------------------------------
+        const events = await parseTeamCalendar(driver, nombre);
+        writeICS(nombre, categoria, events);
+        log(`   ✔ ${events.length} partidos capturados`);
+
+        // -------------------------------
+        // 4) CLASIFICACIÓN IMD
+        // -------------------------------
+        log("   ➕ Iniciando lectura de clasificación IMD…");
+
+        const tabClasif = await driver.findElement(By.id("tab_opc2"));
+        await tabClasif.click();
+        await driver.sleep(1200);
+
+        log("   ✔ Tab clasificaciones pulsado");
+
+        fs.writeFileSync(
+          path.join(DEBUG_DIR, `imd_after_tab_${nombre.replace(/[^a-z0-9]+/gi, "_")}.html`),
+          await driver.getPageSource()
+        );
+
+        const selProv = await driver.wait(until.elementLocated(By.id("selprov")), 8000);
+        await driver.wait(until.elementIsVisible(selProv), 8000);
+        await selProv.sendKeys("1");
+        await driver.sleep(1500);
+
+        log("   ✔ selprov cambiado a PROVISIONALES");
+
+        fs.writeFileSync(
+          path.join(DEBUG_DIR, `imd_after_selprov_${nombre.replace(/[^a-z0-9]+/gi, "_")}.html`),
+          await driver.getPageSource()
+        );
+
+        // -------------------------------
+        // 5) Leer tabla
+        // -------------------------------
+        const clasif = await parseIMDClasificacion(driver);
+
+        const key = `IMD_${categoria}_${nombre}`.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+        const clasifPath = path.join(OUTPUT_DIR, "imd_clasificaciones.json");
+
+        let existing = {};
+        if (fs.existsSync(clasifPath)) {
+          try { existing = JSON.parse(fs.readFileSync(clasifPath, "utf8")); }
+          catch {}
+        }
+
+        if (clasif && clasif.length > 0) {
+          existing[key] = clasif;
+          log(`   ✔ Clasificación nueva (${clasif.length} filas)`);
+        } else {
+          log("   ⚠ No se obtuvo clasificación nueva, usando la guardada si existe.");
+        }
+
+        fs.writeFileSync(clasifPath, JSON.stringify(existing, null, 2));
+        log(`   ✔ Clasificación guardada: key=${key}`);
+
+        fs.writeFileSync(
+          path.join(DEBUG_DIR, `imd_final_${nombre.replace(/[^a-z0-9]+/gi, "_")}.html`),
+          await driver.getPageSource()
+        );
+
+      } catch (err) {
+        log(`❌ ERROR PROCESANDO ${nombre}: ${err.message}`);
+
+        fs.writeFileSync(
+          path.join(DEBUG_DIR, `imd_error_${nombre.replace(/[^a-z0-9]+/gi, "_")}.html`),
+          await driver.getPageSource()
+        );
+
+        log("   ⚠ Snapshot imd_error guardado");
+        continue;
+      }
     }
 
-    // 🧩 Generar automáticamente el index.html al final
-    log("\n🧱 Generando index.html automáticamente...");
+    // -------------------------------
+    // Generar index
+    // -------------------------------
+    log("\n🧱 Generando index.html...");
     execSync("node scripts/generate_index_html.js", { stdio: "inherit" });
-    log("✅ index.html actualizado correctamente.");
+
+    log("💚 IMD COMPLETADO");
 
   } catch (err) {
     log(`❌ ERROR GENERAL: ${err}`);
