@@ -1,189 +1,60 @@
-/* ===========================
-   GLOBAL
-=========================== */
+/* style_team.css - Compacto y uniforme para FEDERADO e IMD */
+
 body {
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  color: #222;
   margin: 0;
   padding: 0;
-  background: #fafafa;
-  color: #222;
+  background: #fff;
 }
 
-.container {
-  max-width: 680px;
-  margin: 0 auto;
-  padding: 14px;
-}
+.container { max-width: 980px; margin: 12px auto; padding: 12px; }
 
-.volver {
-  display: inline-block;
-  margin-bottom: 12px;
-  font-size: 0.9rem;
-  color: #0a58ca;
-  text-decoration: none;
-}
+.team-header { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.team-page-icon { width: 56px; height: 56px; object-fit: contain; }
+.team-header-text h1 { margin: 0; font-size: 18px; }
+.team-header-text .meta { margin: 2px 0 0 0; font-size: 13px; color: #555; }
 
-/* ===========================
-   TEAM HEADER
-=========================== */
-.team-header {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 20px;
-}
+/* Botón volver */
+.volver { display: inline-block; margin-bottom: 8px; color: #333; text-decoration: none; font-size: 13px; }
 
-.team-page-icon {
-  width: 56px;
-  height: 56px;
-  object-fit: contain;
-}
-
-.team-header-text h1 {
-  font-size: 1.45rem;
-  margin: 0;
-  font-weight: 700;
-}
-
-.team-header-text .meta {
-  margin-top: 3px;
-  font-size: 0.82rem;
-  color: #666;
-}
-
-/* ===========================
-   SECTION TITLES
-=========================== */
-section h2 {
-  font-size: 1.2rem;
-  margin: 20px 0 12px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-/* ===========================
-   CLASIFICACIÓN – TABLA REAL
-=========================== */
-
-.table-lite {
+/* Clasificación - tabla compacta */
+table.clasificacion {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  margin-bottom: 15px;
+  font-size: 13px;
+  margin: 8px 0 14px 0;
 }
-
-/* encabezado */
-.table-lite thead th {
-  background: #e7e9ec;
-  padding: 8px 4px;
-  font-size: 0.78rem;
+table.clasificacion thead th {
+  background: #f0f2f4;
+  padding: 5px 6px;
+  border-bottom: 1px solid #d8d8d8;
   text-align: center;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-/* filas */
-.table-lite tbody td {
-  padding: 7px 4px;
-  font-size: 0.82rem;
-  border-bottom: 1px solid #f1f1f1;
-}
-
-/* primera columna (equipo) ocupa más */
-.table-lite tbody td.equipo {
-  text-align: left;
-  width: 48%;
   font-weight: 600;
 }
-
-/* columnas numéricas */
-.table-lite tbody td.num {
-  width: 13%;
-  text-align: center;
-  font-weight: 500;
+table.clasificacion tbody td {
+  padding: 4px 6px;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: middle;
 }
+table.clasificacion tbody tr:nth-child(even) { background: #fbfbfb; }
+table.clasificacion td:nth-child(1) { text-align: center; width: 36px; }
+table.clasificacion td:nth-child(2) { text-align: left; }
+table.clasificacion td:nth-child(n+3) { text-align: right; }
 
-/* última fila sin borde extra */
-.table-lite tbody tr:last-child td {
-  border-bottom: none;
+/* Próximos partidos */
+.partido { padding: 6px 0; border-bottom: 1px dashed #eee; }
+.partido .fecha { font-weight: 600; font-size: 13px; color: #333; }
+.partido .vs { margin-top: 3px; font-size: 14px; color: #111; }
+.partido .lugar, .partido .desc { font-size: 12px; color: #555; margin-top: 4px; }
+
+/* Subscripción */
+.boton-subs { display: inline-block; margin-top: 8px; padding: 6px 10px; background: #eaf3ff; border-radius: 6px; text-decoration: none; color: #0a5; font-weight: 600; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .container { padding: 10px; }
+  .team-page-icon { width: 48px; height: 48px; }
+  table.clasificacion thead th { font-size: 12px; padding: 4px 6px; }
+  table.clasificacion { font-size: 12px; }
 }
-
-/* ===========================
-   PRÓXIMOS PARTIDOS
-=========================== */
-.partido {
-  background: #fff;
-  padding: 8px 14px;
-  margin-bottom: 8px;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
-
-.partido .fecha {
-  font-size: 0.82rem;
-  color: #777;
-}
-
-.partido .vs {
-  font-size: 0.95rem;
-  margin-top: 4px;
-  font-weight: 600;
-}
-
-/* ===========================
-   SUSCRIPCIÓN
-=========================== */
-.boton-subs {
-  display: inline-block;
-  padding: 10px 16px;
-  background: #8fb9ff; /* azul suave */
-  color: #fff;
-  text-decoration: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
-}
-
-.disclaimer {
-  margin-top: 8px;
-  font-size: 0.72rem;
-  color: #666;
-  line-height: 1.25rem;
-}
-
-/* ===========================
-   SMALL LINKS
-=========================== */
-.small-links {
-  margin-top: 8px;
-  font-size: 0.74rem;
-}
-
-.small-links a {
-  color: #0a58ca;
-  text-decoration: none;
-}
-
-.clasificacion {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-}
-
-.clasificacion th {
-  text-align: left;
-  font-weight: bold;
-  padding: 4px 2px;
-}
-
-.clasificacion td {
-  padding: 4px 2px;
-}
-
-.clasificacion tbody tr:nth-child(odd) {
-  background: #fafafa;
-}
-
