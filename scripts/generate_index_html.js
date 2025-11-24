@@ -203,7 +203,6 @@ function buildClasificacionHTML(rows) {
   return html;
 }
 
-
 function buildPlaceholderProximos(team) {
   return `
 <div class="partido">
@@ -217,9 +216,204 @@ function buildPlaceholderProximos(team) {
 }
 
 // -------------------------
+// -------------------------
+// ICS parsing & "Próximos partidos"
+// -------------------------
+
+/**
+ * Unfold ICS lines (join folded lines that start with space or tab)
+ */
+function unfoldICSLines(icsText) {
+  return icsText.replace(/\r?\n[ \t]/g, "");
+}
+
+/**
+ * Parse an ICS datetime or date token into a JS Date.
+ * Handles:
+ *  - DTSTART:20251125T120000
+ *  - DTSTART;TZID=Europe/Madrid:20251125T120000
+ *  - DTSTART;VALUE=DATE:20251125  (all-day)
+ *
+ * Returns { date: Date, allDay: boolean } or null on failure.
+ */
+function parseICSDateToken(token, value) {
+  // token example: DTSTART;TZID=Europe/Madrid
+  const isAllDay = /VALUE=DATE/i.test(token);
+  const tzMatch = token.match(/TZID=([^;:]+)/i);
+  const tzid = tzMatch ? tzMatch[1] : null;
+
+  // value examples: 20251125T120000 or 20251125
+  const v = (value || "").trim();
+
+  if (!v) return null;
+
+  if (isAllDay || /^\d{8}$/.test(v)) {
+    // all-day date (YYYYMMDD)
+    const yyyy = v.slice(0, 4);
+    const mm = v.slice(4, 6);
+    const dd = v.slice(6, 8);
+    // Create a Date at local midnight for that day
+    return { date: new Date(`${yyyy}-${mm}-${dd}T00:00:00`), allDay: true };
+  }
+
+  // datetime YYYYMMDDTHHMMSS or YYYYMMDDTHHMM
+  const m = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?$/);
+  if (!m) {
+    // try without seconds
+    const m2 = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})$/);
+    if (m2) {
+      const [_, yyyy, mm, dd, hh, min] = m2;
+      return { date: new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:00`), allDay: false };
+    }
+    return null;
+  }
+  const [_, yyyy, mm, dd, hh, min, sec] = m;
+  const seconds = sec || "00";
+  // Note: we construct an ISO string without timezone so Node will interpret it as local time.
+  // It's acceptable for display; if you need strict TZ handling, adapt using Intl with ICS TZ.
+  return { date: new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:${seconds}`), allDay: false };
+}
+
+/**
+ * Parse ICS text and return array of events:
+ * { summary, location, description, start: Date, end: Date|null, allDay: boolean }
+ */
+function parseICS(icsText) {
+  const txt = unfoldICSLines(icsText || "");
+  const lines = txt.split(/\r?\n/);
+
+  const events = [];
+  let inEvent = false;
+  let cur = null;
+
+  for (let raw of lines) {
+    if (!raw) continue;
+    const line = raw;
+
+    if (/^BEGIN:VEVENT/i.test(line)) {
+      inEvent = true;
+      cur = { summary: "", location: "", description: "", start: null, end: null, allDay: false };
+      continue;
+    }
+    if (/^END:VEVENT/i.test(line)) {
+      inEvent = false;
+      if (cur && cur.start) {
+        // If end missing and allDay, set end = start + 1 day
+        if (!cur.end && cur.allDay) {
+          cur.end = new Date(cur.start.getTime() + 24 * 3600 * 1000);
+        }
+        events.push(cur);
+      }
+      cur = null;
+      continue;
+    }
+
+    if (!inEvent || !cur) continue;
+
+    // key may contain params: e.g. DTSTART;TZID=Europe/Madrid:20251125T120000
+    const idx = line.indexOf(":");
+    if (idx === -1) continue;
+    const key = line.slice(0, idx);
+    const val = line.slice(idx + 1);
+
+    if (/^DTSTART/i.test(key)) {
+      const parsed = parseICSDateToken(key, val);
+      if (parsed) {
+        cur.start = parsed.date;
+        cur.allDay = parsed.allDay;
+      }
+      continue;
+    }
+
+    if (/^DTEND/i.test(key)) {
+      const parsed = parseICSDateToken(key, val);
+      if (parsed) {
+        cur.end = parsed.date;
+      }
+      continue;
+    }
+
+    if (/^SUMMARY/i.test(key)) {
+      cur.summary = decodeICSText(val);
+      continue;
+    }
+
+    if (/^LOCATION/i.test(key)) {
+      cur.location = decodeICSText(val);
+      continue;
+    }
+
+    if (/^DESCRIPTION/i.test(key)) {
+      cur.description = decodeICSText(val);
+      continue;
+    }
+  }
+
+  return events;
+}
+
+function decodeICSText(s) {
+  if (!s) return "";
+  // Unescape basic ICS escapes
+  return s.replace(/\\n/g, "\n").replace(/\\, /g, ", ").replace(/\\,/g, ",").replace(/\\;/g, ";").trim();
+}
+
+/**
+ * getProximosPartidos: recibe el contenido .ics (string) y devuelve HTML
+ * - selecciona partidos en los siguientes 7 días (desde ahora)
+ * - si no hay ninguno en 7 días, devuelve los 2 próximos partidos futuros
+ */
+function getProximosPartidosFromICS(icsText) {
+  try {
+    const events = parseICS(icsText)
+      .filter(e => e.start instanceof Date && !isNaN(e.start.getTime()))
+      .sort((a, b) => a.start - b.start);
+
+    const now = new Date();
+    const weekAhead = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
+
+    // futuros ( >= now )
+    const future = events.filter(e => e.start.getTime() >= now.getTime());
+
+    // partidos en próximos 7 días
+    const next7 = future.filter(e => e.start.getTime() <= weekAhead.getTime());
+
+    let selected = next7;
+    if (!selected || !selected.length) {
+      // tomar los 2 siguientes futuros (si existen)
+      selected = future.slice(0, 2);
+    }
+
+    if (!selected || !selected.length) return "<p>No hay partidos próximos.</p>";
+
+    return selected.map(e => {
+      const d = e.start;
+      // formatear fecha como "Sáb 22 — 11:00" en es-ES
+      const fecha = d.toLocaleDateString("es-ES", {
+        weekday: "short",
+        day: "numeric",
+        month: "short"
+      });
+      const hora = e.allDay ? "" : d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+
+      return `
+<div class="partido">
+  <div class="fecha">${escapeHtml(fecha)}${hora ? " — " + escapeHtml(hora) : ""}</div>
+  <div class="vs">${escapeHtml(e.summary || "Partido")}</div>
+  ${e.location ? `<div class="lugar">${escapeHtml(e.location)}</div>` : ""}
+  ${e.description ? `<div class="desc">${escapeHtml(e.description)}</div>` : ""}
+</div>`;
+    }).join("\n");
+
+  } catch (err) {
+    return `<p>Error leyendo calendario: ${escapeHtml(String(err.message || err))}</p>`;
+  }
+}
+
+// -------------------------
 // GENERAR PÁGINA INDIVIDUAL
 // -------------------------
-async function generateTeamPage({ team, category, competition, urlPath, slug, iconPath, federadoInfo }) {
+async function generateTeamPage({ team, category, competition, urlPath, slug, iconPath, federadoInfo, filename }) {
   const title = `${team} – ${category} (${competition})`;
   const webcalUrl = `webcal://${BASE_WEBCAL_HOST}/${BASE_REPO_PATH}/${encodeURI(urlPath)}`;
 
@@ -240,40 +434,45 @@ async function generateTeamPage({ team, category, competition, urlPath, slug, ic
   // ================================
   // CLASIFICACIÓN (placeholder real)
   // ================================
- let clasificacionHtml = "<p>Cargando…</p>";
+  let clasificacionHtml = "<p>Cargando…</p>";
 
-if (competition === "FEDERADO" && federadoInfo && federadoInfo.group !== 0) {
-  try {
-    const ranking = await fetchFederadoRanking(
-      federadoInfo.tournament,
-      federadoInfo.group
-    );
-    if (ranking) clasificacionHtml = buildClasificacionHTML(ranking);
-  } catch (err) {
-    console.warn("⚠️ Error obteniendo clasificación:", err);
+  if (competition === "FEDERADO" && federadoInfo && federadoInfo.group !== 0) {
+    try {
+      const ranking = await fetchFederadoRanking(
+        federadoInfo.tournament,
+        federadoInfo.group
+      );
+      if (ranking) clasificacionHtml = buildClasificacionHTML(ranking);
+    } catch (err) {
+      console.warn("⚠️ Error obteniendo clasificación:", err);
+    }
+  } else {
+    clasificacionHtml = "<p>No disponible para competición IMD.</p>";
   }
-} else {
-  clasificacionHtml = "<p>No disponible para competición IMD.</p>";
-}
-
 
   // ================================
-  // PRÓXIMOS PARTIDOS (placeholder)
+  // PRÓXIMOS PARTIDOS (real)
   // ================================
-  const proximosHtml = `
-<div class="partido">
-  <div class="fecha">Sáb 18 — 12:00</div>
-  <div class="vs">${escapeHtml(team)} vs Rival X</div>
-</div>
-<div class="partido">
-  <div class="fecha">Dom 19 — 10:00</div>
-  <div class="vs">Rival Y vs ${escapeHtml(team)}</div>
-</div>
+  let proximosHtml = "<p>No hay partidos próximos.</p>";
+  if (filename) {
+    try {
+      const icsPath = path.join(CALENDAR_DIR, filename);
+      if (fs.existsSync(icsPath)) {
+        const icsText = fs.readFileSync(icsPath, "utf8");
+        const htmlBlock = getProximosPartidosFromICS(icsText);
+        if (htmlBlock && htmlBlock.trim()) proximosHtml = htmlBlock;
+      } else {
+        proximosHtml = "<p>Calendario no disponible (fichero no encontrado).</p>";
+      }
+    } catch (err) {
+      proximosHtml = `<p>Error leyendo .ics: ${escapeHtml(String(err.message || err))}</p>`;
+    }
+  } else {
+    proximosHtml = "<p>Calendario no especificado.</p>";
+  }
 
-<div class="small-links">
-  ${calendarOfficialUrl ? `<a href="${calendarOfficialUrl}" target="_blank">Calendario oficial</a>` : ""}
-</div>
-`;
+  // URLs oficiales small link
+  const smallLinksHtml = calendarOfficialUrl ? `<div class="small-links"><a href="${calendarOfficialUrl}" target="_blank">Calendario oficial</a></div>` : "";
 
   // ================================
   // CARGAR PLANTILLA
@@ -289,7 +488,8 @@ if (competition === "FEDERADO" && federadoInfo && federadoInfo.group !== 0) {
     .replace(/{{icon}}/g, iconPath)
     .replace(/{{webcal}}/g, webcalUrl)
     .replace(/{{clasificacion}}/g, clasificacionHtml)
-    .replace(/{{proximosPartidos}}/g, proximosHtml);
+    .replace(/{{proximosPartidos}}/g, proximosHtml)
+    .replace(/{{smallLinks}}/g, smallLinksHtml);
 
   // generar archivo HTML
   const outDir = EQUIPOS_DIR;
@@ -298,7 +498,6 @@ if (competition === "FEDERADO" && federadoInfo && federadoInfo.group !== 0) {
   const outPath = path.join(outDir, `${slug}.html`);
   fs.writeFileSync(outPath, tpl, "utf8");
 }
-
 
 // -------------------------
 // Escapar HTML simple
@@ -347,38 +546,38 @@ async function generateHTML(calendars, federadoMap) {
       teams.sort(sortTeams);
 
       for (const { team, path: filePath, urlPath, filename, slug } of teams) {
-  const icon = getIconForTeam(team);
+        const icon = getIconForTeam(team);
 
-  // link to team page (opción A: slug = filename without .ics)
-  const equipoPage = `equipos/${slug}.html`;
+        // link to team page (opción A: slug = filename without .ics)
+        const equipoPage = `equipos/${slug}.html`;
 
-  // buscar mapping federado por clave = filename sin .ics
-  const key = slug;
-  const federadoInfo = (federadoMap && federadoMap[key]) ? federadoMap[key] : null;
+        // buscar mapping federado por clave = filename sin .ics
+        const key = slug;
+        const federadoInfo = (federadoMap && federadoMap[key]) ? federadoMap[key] : null;
 
-  // 🔍 DEBUG: comprobar si federadoInfo existe
-  if (comp === "FEDERADO" && !federadoInfo) {
-    console.log(`ℹ️ federado_ids.json: no mapping for key="${key}" (file=${filename})`);
-  }
+        // 🔍 DEBUG: comprobar si federadoInfo existe
+        if (comp === "FEDERADO" && !federadoInfo) {
+          console.log(`ℹ️ federado_ids.json: no mapping for key="${key}" (file=${filename})`);
+        }
 
-  // generar la página individual también
-  await generateTeamPage({
-    team: team,
-    category,
-    competition: comp,
-    urlPath,
-    slug,
-    iconPath: icon,
-    federadoInfo
-  });
+        // generar la página individual también
+        await generateTeamPage({
+          team: team,
+          category,
+          competition: comp,
+          urlPath,
+          slug,
+          iconPath: icon,
+          federadoInfo,
+          filename // <<< ahora pasamos filename para leer el .ics
+        });
 
-  html += `
+        html += `
 <li class="team-item">
   <img class="team-icon" src="${icon}" alt="${escapeHtml(team)}" />
   <a class="team-link" href="${equipoPage}">${escapeHtml(team)}</a>
 </li>`;
-}
-
+      }
 
       html += `</ul></div>`;
     }
@@ -425,5 +624,3 @@ async function generateHTML(calendars, federadoMap) {
     process.exit(1);
   }
 })();
-
-
