@@ -114,15 +114,17 @@ jobs:
           name: proxy-test
           path: calendarios/debug/
 
-      - name: Run update (Federado + IMD mínimo + IMD multi)
-        env:
-          CHROME_BIN: /usr/bin/google-chrome
-          CHROMEDRIVER_PATH: /usr/local/bin/chromedriver
-          DEBUG_IMD: "1"
-        run: |
-          node scripts/update_calendars_federado_multi.js
-          node scripts/update_calendars_imd_multi.js
-          node scripts/generate_index_html.js
+      - name: Run update (Federado + IMD calendarios + IMD clasificaciones)
+      env:
+        CHROME_BIN: /usr/bin/google-chrome
+        CHROMEDRIVER_PATH: /usr/local/bin/chromedriver
+        DEBUG_IMD: "1"
+      run: |
+        node scripts/update_calendars_federado_multi.js
+        node scripts/update_calendars_imd_multi.js
+        node scripts/update_clasificaciones_imd.js   # ← FALTA ESTO
+        node scripts/generate_index_html.js
+
 
       - name: Upload debug artifacts
         if: always()
