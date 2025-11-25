@@ -35,7 +35,7 @@ function log(msg) {
 }
 
 function safeKey(category, teamName) {
-  return `imd_${(category || "").toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "")}_${(teamName || "").toLowerCase().replace(/\s+/g, "_').replace(/[^a-z0-9_]/g, "")}`.replace(/_+/g, "_");
+  return `imd_${(category || "").toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "")}_${(teamName || "").toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "")}`.replace(/_+/g, "_");
 }
 
 // fallback safeKey (more robust)
