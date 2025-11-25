@@ -376,7 +376,8 @@ async function generateTeamPage({
   // URLs oficiales federación
   let rankingUrl = "";
   let calendarOfficialUrl = "";
-  if (competition === "" && Info) {
+
+  if (competition === "FEDERADO" && Info) {
     const { tournament, group } = Info;
     if (group && Number(group) !== 0) {
       rankingUrl = `https://favoley.es/es/tournament/${tournament}/ranking/${group}`;
@@ -389,18 +390,30 @@ async function generateTeamPage({
   // ------------- Clasificación -------------
   let clasificacionHtml = "<p>Cargando…</p>";
 
-  if (competition === "" && Info) {
+  // FEDERADO
+  if (competition === "FEDERADO" && Info) {
     try {
       const ranking = await fetchRanking(Info.tournament, Info.group);
-      if (ranking) clasificacionHtml = buildClasificacionHTML(ranking);
+      if (ranking && ranking.length)
+        clasificacionHtml = buildClasificacionHTML(ranking);
+      else
+        clasificacionHtml = "<p>Clasificación no disponible.</p>";
     } catch (err) {
       clasificacionHtml = "<p>Error cargando clasificación federada.</p>";
     }
 
+  // IMD
   } else if (competition === "IMD") {
+
+    // Clave: imd_categoria_equipo
     const key = `imd_${category}_${team}`.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
     const rows = imdClasifMap && imdClasifMap[key];
-    clasificacionHtml = rows ? buildClasificacionIMD(rows) : "<p>No disponible para esta categoría.</p>";
+
+    if (rows && rows.length)
+      clasificacionHtml = buildClasificacionIMD(rows);
+    else
+      clasificacionHtml = "<p>Clasificación IMD no disponible.</p>";
 
   } else {
     clasificacionHtml = "<p>No disponible.</p>";
@@ -429,6 +442,7 @@ async function generateTeamPage({
 
   fs.writeFileSync(path.join(EQUIPOS_DIR, `${slug}.html`), tpl, "utf8");
 }
+
 
 // -------------------------
 // Generar HTML principal
@@ -470,15 +484,16 @@ async function generateHTML(calendars, Map, imdClasifMap) {
         const Info = Map ? Map[key] : null;
 
         await generateTeamPage({
-          team: t.team,
+          team: team,
           category,
           competition: comp,
-          urlPath: t.urlPath,
-          slug: t.slug,
+          urlPath,
+          slug,
           iconPath: icon,
-          Info,
-          imdClasifMap
-        });
+          federadoInfo,
+          imdClasif: imdClasifMap[slug] || null
+});
+
 
         html += `
 <li class="team-item">
