@@ -291,8 +291,7 @@ async function parseTeamCalendar(driver, teamName) {
     // ---- generar index.html ----
     log("\n🧱 Generando index.html automáticamente...");
     try {
-      execSync("node scripts/generate_index_html.js", { stdio: "inherit" });
-      log("✨ index.html actualizado correctamente.");
+      
     } catch (err) {
       log(`❌ Error generando index.html: ${err.message || err}`);
     }
