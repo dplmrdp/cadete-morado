@@ -115,10 +115,10 @@ function collectCalendars() {
   const allFiles = fs.readdirSync(CALENDAR_DIR).filter(f => f.toLowerCase().endsWith(".ics"));
   const data = {};
   for (const file of allFiles) {
-    const competition = file.toLowerCase().startsWith("federado_") ? "FEDERADO" : "IMD";
+    const competition = file.toLowerCase().startsWith("_") ? "" : "IMD";
     const category = detectCategoryFromFilename(file);
     const clean = file
-      .replace(/^federado_/, "")
+      .replace(/^_/, "")
       .replace(/^imd_/, "")
       .replace(/\.ics$/i, "")
       .replace(/_/g, " ")
@@ -129,7 +129,7 @@ function collectCalendars() {
     const fileUrlPath = toPosix(filePath);
     const slug = file.replace(/\.ics$/i, "");
 
-    if (!data[category]) data[category] = { FEDERADO: [], IMD: [] };
+    if (!data[category]) data[category] = { : [], IMD: [] };
 
     data[category][competition].push({
       team: pretty,
@@ -143,7 +143,7 @@ function collectCalendars() {
 }
 
 // -------------------------
-// Helpers HTML: Clasificación FEDERADO
+// Helpers HTML: Clasificación 
 // -------------------------
 function buildClasificacionHTML(rows) {
   if (!rows || !rows.length) return `<p>Clasificación no disponible.</p>`;
@@ -368,7 +368,7 @@ function escapeHtml(s) {
 // -------------------------
 async function generateTeamPage({
   team, category, competition, urlPath, slug,
-  iconPath, federadoInfo, imdClasifMap
+  iconPath, Info, imdClasifMap
 }) {
   const title = `${team} – ${category} (${competition})`;
   const webcalUrl = `webcal://${BASE_WEBCAL_HOST}/${BASE_REPO_PATH}/${encodeURI(urlPath)}`;
@@ -376,8 +376,8 @@ async function generateTeamPage({
   // URLs oficiales federación
   let rankingUrl = "";
   let calendarOfficialUrl = "";
-  if (competition === "FEDERADO" && federadoInfo) {
-    const { tournament, group } = federadoInfo;
+  if (competition === "" && Info) {
+    const { tournament, group } = Info;
     if (group && Number(group) !== 0) {
       rankingUrl = `https://favoley.es/es/tournament/${tournament}/ranking/${group}`;
       calendarOfficialUrl = `https://favoley.es/es/tournament/${tournament}/calendar/${group}/all`;
@@ -389,9 +389,9 @@ async function generateTeamPage({
   // ------------- Clasificación -------------
   let clasificacionHtml = "<p>Cargando…</p>";
 
-  if (competition === "FEDERADO" && federadoInfo) {
+  if (competition === "" && Info) {
     try {
-      const ranking = await fetchFederadoRanking(federadoInfo.tournament, federadoInfo.group);
+      const ranking = await fetchRanking(Info.tournament, Info.group);
       if (ranking) clasificacionHtml = buildClasificacionHTML(ranking);
     } catch (err) {
       clasificacionHtml = "<p>Error cargando clasificación federada.</p>";
@@ -433,7 +433,7 @@ async function generateTeamPage({
 // -------------------------
 // Generar HTML principal
 // -------------------------
-async function generateHTML(calendars, federadoMap, imdClasifMap) {
+async function generateHTML(calendars, Map, imdClasifMap) {
   if (!fs.existsSync(EQUIPOS_DIR))
     fs.mkdirSync(EQUIPOS_DIR, { recursive: true });
 
@@ -456,7 +456,7 @@ async function generateHTML(calendars, federadoMap, imdClasifMap) {
 
     html += `<section class="category-block"><h2 class="category-title">${category}</h2>`;
 
-    for (const comp of ["FEDERADO", "IMD"]) {
+    for (const comp of ["", "IMD"]) {
       const teams = calendars[category][comp];
       if (!teams || !teams.length) continue;
 
@@ -467,7 +467,7 @@ async function generateHTML(calendars, federadoMap, imdClasifMap) {
       for (const t of teams) {
         const icon = getIconForTeam(t.team);
         const key = t.slug;
-        const federadoInfo = federadoMap ? federadoMap[key] : null;
+        const Info = Map ? Map[key] : null;
 
         await generateTeamPage({
           team: t.team,
@@ -476,7 +476,7 @@ async function generateHTML(calendars, federadoMap, imdClasifMap) {
           urlPath: t.urlPath,
           slug: t.slug,
           iconPath: icon,
-          federadoInfo,
+          Info,
           imdClasifMap
         });
 
@@ -507,7 +507,7 @@ async function generateHTML(calendars, federadoMap, imdClasifMap) {
 // -------------------------
 (async function main() {
   try {
-    console.log("📋 Generando index.html con clasificaciones (FEDERADO + IMD)...");
+    console.log("📋 Generando index.html con clasificaciones ( + IMD)...");
 
     // federado_ids.json
     let federadoMap = null;
@@ -521,20 +521,28 @@ async function generateHTML(calendars, federadoMap, imdClasifMap) {
       }
     }
 
-    // Cargar clasificaciones IMD
-    let imdClasifMap = null;
-    const imdClasifPath = path.join(CALENDAR_DIR, "imd_clasificaciones.json");
-    if (fs.existsSync(imdClasifPath)) {
-      try {
-        imdClasifMap = JSON.parse(fs.readFileSync(imdClasifPath, "utf8"));
-        console.log(`ℹ️ clasificaciones IMD cargadas (${Object.keys(imdClasifMap).length} equipos)`);
-      } catch (e) {
-        console.warn("⚠️ Error leyendo imd_clasificaciones.json:", e.message);
-      }
-    }
+   // --- cargar clasificaciones IMD si existen ---
+let imdClasifMap = {};
+const imdClasifPath = path.join(process.cwd(), "calendarios", "imd_clasificaciones.json");
+if (fs.existsSync(imdClasifPath)) {
+  try {
+    imdClasifMap = JSON.parse(fs.readFileSync(imdClasifPath, "utf8"));
+    console.log(`ℹ️ imd_clasificaciones.json cargado (${Object.keys(imdClasifMap).length} claves)`);
+  } catch (e) {
+    console.warn("⚠️ No se pudo parsear imd_clasificaciones.json:", e.message);
+    imdClasifMap = {};
+  }
+} else {
+  console.log("ℹ️ imd_clasificaciones.json no encontrado — páginas IMD no mostrarán clasificaciones guardadas.");
+}
 
-    const calendars = collectCalendars();
-    await generateHTML(calendars, federadoMap, imdClasifMap);
+
+  // antes:
+// await generateHTML(calendars, federadoMap);
+
+// ahora:
+await generateHTML(calendars, federadoMap, imdClasifMap);
+
 
   } catch (err) {
     console.error("❌ ERROR GENERAL:", err);
