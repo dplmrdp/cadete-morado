@@ -1,212 +1,274 @@
 // scripts/update_clasificaciones_imd.js
-// Extrae las CLASIFICACIONES IMD completas para cada equipo LAS FLORES.
-// Flujo:
-//   - Buscar "las flores"
-//   - Por cada equipo:
-//        datosequipo(id)
-//        pestaña "Consulta de Clasificaciones"
-//        selprov="1" (PROVISIONALES)
-//        parsear tabla IMD completa
-//        guardar en imd_clasificaciones.json
-//
-// Columnas extraídas:
-//   puntos, PJ, PG, PP, JF, JC
-//
-// Estructura de salida: {
-//   imd_<categoria>_<equipo>: [
-//      { equipo, pj, pg, pp, jf, jc, puntos }, ...
-//   ]
-// }
+// Scraper IMD: por cada equipo LAS FLORES -> obtener clasificación (Resultados PROVISIONALES)
+// Guarda resultado en calendarios/imd_clasificaciones.json
 
 const fs = require("fs");
 const path = require("path");
-const { Builder, By, Key, until } = require("selenium-webdriver");
+const { Builder, By, until } = require("selenium-webdriver");
 const chrome = require("selenium-webdriver/chrome");
 
 const IMD_URL = "https://imd.sevilla.org/app/jjddmm_resultados/";
 const SEARCH_TERM = "las flores";
-
 const OUTPUT_DIR = path.join("calendarios");
 const DEBUG_DIR = path.join(OUTPUT_DIR, "debug");
-const LOG_DIR = path.join(OUTPUT_DIR, "logs");
-const OUT_JSON = path.join(OUTPUT_DIR, "imd_clasificaciones.json");
+const LOG_FILE = path.join(OUTPUT_DIR, `imd_clasif_${new Date().toISOString().replace(/[:.]/g,"-")}.log`);
 
 fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 fs.mkdirSync(DEBUG_DIR, { recursive: true });
-fs.mkdirSync(LOG_DIR, { recursive: true });
 
-const RUN_STAMP = new Date().toISOString().replace(/[:.]/g, "-");
-const LOG_FILE = path.join(LOG_DIR, `imd_clasif_${RUN_STAMP}.log`);
-
-function log(msg) {
-  console.log(msg);
-  try { fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${msg}\n`); } catch {}
+function log(...args) {
+  console.log(...args);
+  try { fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${args.join(" ")}\n`); } catch (e) {}
+}
+function safeKey(category, teamName) {
+  return `imd_${(category||"").toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"")}_${(teamName||"").toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"")}`.replace(/_+/g,"_");
+}
+function toIntOrNull(s) {
+  if (s === null || s === undefined) return null;
+  const n = parseInt(String(s).replace(/[^\d\-]/g,''), 10);
+  return Number.isFinite(n) ? n : null;
 }
 
-// Normaliza keys para JSON
-function safeKey(categoria, nombre) {
-  return `imd_${categoria.toLowerCase().replace(/[^a-z0-9]+/g,"_")}_${nombre.toLowerCase().replace(/[^a-z0-9]+/g,"_")}`;
-}
-
-// ---------------
-// PARSER CLASIFICACIÓN IMD (tabla fija de voleibol)
-// ---------------
-async function parseClasificacionTablaIMD(clasTable) {
-  const rows = await clasTable.findElements(By.css("tbody > tr"));
-  const out = [];
-
-  for (const r of rows) {
-    const tds = await r.findElements(By.css("td"));
-    if (tds.length < 11) continue;
-
-    const cols = [];
-    for (const td of tds) cols.push((await td.getText()).trim());
-
-    // Saltar encabezado
-    if (cols[0].toLowerCase().includes("equipo")) continue;
-    if (cols[0].toLowerCase().includes("resultados provisionales")) continue;
-
-    out.push({
-      equipo: cols[0].replace(/^\d+\s*-\s*/, "").trim(),
-      pj: parseInt(cols[1]) || 0,
-      pg: parseInt(cols[2]) || 0,
-      pp: parseInt(cols[4]) || 0,
-      jf: parseInt(cols[6]) || 0,
-      jc: parseInt(cols[7]) || 0,
-      puntos: parseInt(cols[10]) || 0
-    });
-  }
-
-  return out;
-}
-
-// -------------------------------------------------------------
-// MAIN
-// -------------------------------------------------------------
 (async () => {
-  log("🌼 Iniciando extracción de CLASIFICACIONES IMD...");
+  log("🌼 Iniciando obtención de clasificaciones IMD (Resultados PROVISIONALES)...");
 
   const options = new chrome.Options()
-    .addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage")
-    .addArguments("--lang=es-ES", "--window-size=1280,1024");
+    .addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--lang=es-ES");
 
   const driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
-  const clasifMap = {};
 
   try {
     await driver.get(IMD_URL);
-    log(`🌐 Página IMD abierta: ${IMD_URL}`);
+    log("🌐 Página abierta:", IMD_URL);
 
-    // Buscar "las flores"
+    // buscar terminos
     const input = await driver.wait(until.elementLocated(By.id("busqueda")), 15000);
-    await driver.wait(until.elementIsVisible(input), 5000);
     await input.clear();
-    await input.sendKeys(SEARCH_TERM, Key.ENTER);
-    log(`🔎 Buscando '${SEARCH_TERM}'...`);
-    await driver.sleep(1200);
+    await input.sendKeys(SEARCH_TERM);
+    // el sitio tiene un button genérico; pulsamos el primero visible
+    const btn = await driver.findElement(By.css("button"));
+    await btn.click();
+    log("🔎 Buscando equipos con needle:", SEARCH_TERM);
 
-    // Localizar tabla de equipos
-    await driver.wait(
-      until.elementLocated(By.xpath("//table[contains(@class,'tt')]//td[contains(.,'Nº.Equipos')]")),
-      10000
-    );
+    // esperar resultados
+    await driver.wait(until.elementLocated(By.css("#resultado_equipos tbody tr")), 10000);
+    const rows = await driver.findElements(By.css("#resultado_equipos tbody tr"));
+    log(`📋 ${rows.length} filas en resultados de equipos.`);
 
-    const tab1 = await driver.findElement(By.id("tab1"));
-    const table = await tab1.findElement(By.css("table.tt"));
-    const rows = await table.findElements(By.css("tbody > tr"));
-    log(`📋 ${rows.length} filas analizadas`);
-
-    // Extraer lista de equipos LAS FLORES
     const equipos = [];
-
-    for (const row of rows) {
+    for (const r of rows) {
       try {
-        const cols = await row.findElements(By.css("td"));
-        if (cols.length < 3) continue;
-
-        const nombre = (await cols[0].getText()).trim();
-        const categoria = (await cols[2].getText()).trim();
-        const rowHtml = await row.getAttribute("outerHTML");
-        const match = rowHtml.match(/datosequipo\('([A-F0-9-]+)'\)/i);
-
-        if (match && nombre.toUpperCase().includes("LAS FLORES")) {
-          equipos.push({ id: match[1], nombre, categoria });
+        const tds = await r.findElements(By.css("td"));
+        if (tds.length < 3) continue;
+        const name = (await tds[0].getText()).trim();
+        const category = (await tds[2].getText()).trim();
+        if ((name || "").toLowerCase().includes("las flores")) {
+          // recuperar el datosequipo id si existe en outerHTML
+          const outer = await r.getAttribute("outerHTML");
+          const m = outer.match(/datosequipo\('([A-F0-9-]+)'\)/i);
+          equipos.push({ name, category, id: m ? m[1] : null });
         }
-      } catch(e){}
+      } catch (e) { /* ignore row */ }
     }
+    log(`🌸 ${equipos.length} equipos "LAS FLORES" detectados.`);
 
-    log(`🌸 ${equipos.length} equipos LAS FLORES detectados.`);
+    const resultMap = {};
 
-    // ------------------------------------------------------
-    // PROCESAR CADA EQUIPO
-    // ------------------------------------------------------
-    for (const { id, nombre, categoria } of equipos) {
-      const key = safeKey(categoria, nombre);
-      log(`\n➡️ Procesando ${nombre} (${categoria}) - clave: ${key}`);
+    for (const team of equipos) {
+      log(`\n➡️ Procesando clasificación para: ${team.name} (${team.category})`);
+      const slugKey = safeKey(team.category, team.name);
 
       try {
-        // Abrir ficha del equipo
-        await driver.executeScript(`datosequipo("${id}")`);
-        await driver.sleep(500);
-        log("✔ datosequipo ejecutado");
-
-        // Pestaña Clasificaciones
-        await driver.findElement(By.id("tab_opc2")).click();
-        await driver.sleep(300);
-        log("✔ Pestaña 'Consulta de Clasificaciones' abierta");
-
-        // Cambiar a PROVISIONALES (value=1)
-        try {
-          const selprov = await driver.findElement(By.id("selprov"));
-          await driver.executeScript(`
-            arguments[0].value = '1';
-            arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
-          `, selprov);
-          await driver.sleep(600);
-          log("✔ PROVISIONALES seleccionado");
-        } catch(e) {
-          log("⚠ No encontré selprov");
+        // Ejecutar datosequipo para cargar info del equipo (misma acción que en calendarios)
+        if (team.id) {
+          await driver.executeScript(`datosequipo("${team.id}")`);
+          log("   ✔ datosequipo ejecutado (id)", team.id);
+        } else {
+          // fallback: buscar por nombre en el input y pulsar buscar
+          const searchInput = await driver.findElement(By.id("busqueda"));
+          await searchInput.clear();
+          await searchInput.sendKeys(team.name);
+          await driver.findElement(By.css("button")).click();
+          log("   ✔ busqueda por nombre ejecutada como fallback");
         }
 
-        // Esperar tabla clasificación
-        await driver.wait(until.elementLocated(By.css("#tab1 table.tt")), 8000);
-        const clasTable = await driver.findElement(By.css("#tab1 table.tt"));
-        log("✔ Tabla de clasificación cargada");
+        // Esperar que #tab1 exista y sea visible (contenedor de tabs)
+        await driver.wait(until.elementLocated(By.id("tab1")), 8000);
+        // Hacemos click en la pestaña "Consulta de Clasificaciones" (id tab_opc2) -> si está siempre presente, click seguro
+        try {
+          const tabClas = await driver.findElement(By.css("#tab_opc2"));
+          await tabClas.click();
+          log("   ✔ Tab 'Consulta de Clasificaciones' pulsado");
+        } catch (e) {
+          // si no hay click posible, intentar ejecutar script que active la pestaña
+          await driver.executeScript(`var el = document.getElementById('tab_opc2'); if(el) el.click();`);
+          log("   ⚠ Intentado activar tab_opc2 vía script");
+        }
 
-        // Parsear tabla
-        const clasif = await parseClasificacionTablaIMD(clasTable);
-        log(`✔ ${clasif.length} equipos extraídos`);
+        // Forzar select a PROVISIONALES (value "1") y ejecutar onchange handler
+        const setProvScript = `
+          (function(){
+            var s = document.getElementById('selprov');
+            if(!s) return false;
+            s.value = '1';
+            if(typeof cambioprov === 'function') {
+              try { cambioprov(); } catch(e) { /* ignore */ }
+            }
+            // return whether selprov exists
+            return true;
+          })();
+        `;
+        const ok = await driver.executeScript(setProvScript);
+        if (!ok) {
+          log("   ❗ selprov no encontrado en la página (no se pudo seleccionar provisionales)");
+        } else {
+          log("   ✔ selprov cambiado a '1' (PROVISIONALES) y cambiado invocado");
+        }
 
-        clasifMap[key] = clasif;
+        // esperar que la tabla de clasificación aparezca dentro de #tab1
+        // la tabla suele tener class 'tt' y contener 'Resultados Provisionales' o 'Equipo' en thead
+        await driver.wait(async () => {
+          const src = await driver.getPageSource();
+          return /Resultados\s+Provisionales|Equipo/i.test(src) && (await driver.findElements(By.css("#tab1 table.tt"))).length > 0;
+        }, 8000).catch(() => {}); // tolerante
+
+        // localizar la tabla de clasificacion: buscar la tabla.tt que contenga 'Resultados Provisionales' o un thead con 'Equipo'
+        let tabla = null;
+        const candidates = await driver.findElements(By.css("#tab1 table.tt"));
+        for (const t of candidates) {
+          try {
+            const html = await t.getAttribute("outerHTML");
+            if (/Resultados\s+Provisionales|Equipo/i.test(html) || /Puntos|PJ|PG|PP|JF|JC/i.test(html)) {
+              tabla = t;
+              break;
+            }
+          } catch (e) {}
+        }
+        if (!tabla) {
+          // como fallback, usar el primer table.tt encontrado
+          if (candidates.length > 0) tabla = candidates[0];
+        }
+
+        if (!tabla) {
+          log("   ❌ No se encontró tabla de clasificación para este equipo. Guardando snapshot y continuando.");
+          try { fs.writeFileSync(path.join(DEBUG_DIR, `imd_clasif_no_table_${slugKey}.html`), await driver.getPageSource(), "utf8"); } catch (e) {}
+          continue;
+        }
+
+        // parse header para mapear índices dinámicamente
+        const headers = await tabla.findElements(By.css("thead th"));
+        const thTexts = headers.length ? await Promise.all(headers.map(h => h.getText().then(t => (t||"").trim()))) : [];
+        // fallback: algunas tablas no usan thead, leer primer TR as header
+        if (thTexts.length === 0) {
+          const firstRowTds = await tabla.findElements(By.css("tbody tr:first-child td"));
+          const maybeHeaders = await Promise.all(firstRowTds.map(c => c.getText().then(t => (t||"").trim())));
+          // If first row contains words like 'Equipo' or 'PJ', consider it header and skip it later
+          if (maybeHeaders.some(x => /Equipo|PJ|Puntos|PG|JF|JC/i.test(x))) {
+            for (let i=0;i<maybeHeaders.length;i++) thTexts.push(maybeHeaders[i]);
+          }
+        }
+
+        // derive indices
+        const idxOf = (names) => {
+          for (const name of names) {
+            const idx = thTexts.findIndex(h => h && h.toLowerCase().includes(name.toLowerCase()));
+            if (idx >= 0) return idx;
+          }
+          return -1;
+        };
+
+        const idxEquipo = idxOf(["Equipo", "Equipo"]);
+        const idxPTS = idxOf(["Puntos","PTS"]);
+        const idxPJ = idxOf(["PJ"]);
+        const idxPG = idxOf(["PG"]);
+        const idxPP = idxOf(["PP"]);
+        // JF -> SG, JC -> SP (confirmado por ti: opción A)
+        const idxJF = idxOf(["JF","JF " ,"JF"]);
+        const idxJC = idxOf(["JC","JC ","JC"]);
+
+        // if header parsing failed, try fallback positions based on common IMD layout:
+        // Equipo(0), PJ(1), PG(2), PE(3), PP(4), PNP(5), JF(6), JC(7), TF(8), TC(9), Puntos(10)
+        let fallbackUsed = false;
+        if (idxEquipo === -1 && idxPTS === -1 && thTexts.length === 0) {
+          fallbackUsed = true;
+        }
+
+        // parse tbody rows (ignore header rows if any)
+        const bodyRows = await tabla.findElements(By.css("tbody > tr"));
+        const parsedRows = [];
+
+        for (const tr of bodyRows) {
+          try {
+            const tds = await tr.findElements(By.css("td"));
+            if (tds.length === 0) continue;
+            // get all cell texts
+            const vals = await Promise.all(tds.map(td => td.getText().then(t => (t||"").trim())));
+            // if header row, skip (contains words)
+            const isHeaderRow = vals.some(v => /Equipo|PJ|Puntos|PG|JF|JC/i.test(v));
+            if (isHeaderRow) continue;
+
+            // fallback mapping when header indices unknown
+            let equipoTxt = null, pts=null, pj=null, pg=null, pp=null, sg=null, sp=null;
+            if (!fallbackUsed && (idxEquipo >=0 || idxPTS>=0 || idxJF>=0)) {
+              if (idxEquipo>=0) equipoTxt = vals[idxEquipo] || vals[0];
+              else equipoTxt = vals[0];
+
+              pts = (idxPTS>=0)? toIntOrNull(vals[idxPTS]) : toIntOrNull(vals[vals.length-1]);
+              pj = (idxPJ>=0)? toIntOrNull(vals[idxPJ]) : toIntOrNull(vals[1]);
+              pg = (idxPG>=0)? toIntOrNull(vals[idxPG]) : toIntOrNull(vals[2]);
+              pp = (idxPP>=0)? toIntOrNull(vals[idxPP]) : toIntOrNull(vals[4]);
+              sg = (idxJF>=0)? toIntOrNull(vals[idxJF]) : toIntOrNull(vals[6]);
+              sp = (idxJC>=0)? toIntOrNull(vals[idxJC]) : toIntOrNull(vals[7]);
+            } else {
+              // fallback fixed positions
+              equipoTxt = vals[0];
+              pj = toIntOrNull(vals[1]);
+              pg = toIntOrNull(vals[2]);
+              pp = toIntOrNull(vals[4]);
+              sg = toIntOrNull(vals[6]);
+              sp = toIntOrNull(vals[7]);
+              pts = toIntOrNull(vals[vals.length-1]);
+            }
+
+            parsedRows.push({
+              team: equipoTxt,
+              puntos: pts,
+              pj: pj,
+              pg: pg,
+              pp: pp,
+              sg: sg,
+              sp: sp
+            });
+          } catch (e) {
+            // ignore row parse error
+          }
+        } // end for rows
+
+        // If parsedRows is empty but page had content, save snapshot for debugging
+        if (!parsedRows.length) {
+          log("   ⚠ Se encontró tabla pero no se pudieron parsear filas. Guardando snapshot.");
+          try { fs.writeFileSync(path.join(DEBUG_DIR, `imd_clasif_emptyrows_${slugKey}.html`), await driver.getPageSource(), "utf8"); } catch (e) {}
+        } else {
+          log(`   ✔ Tabla parseada: ${parsedRows.length} filas`);
+        }
+
+        resultMap[slugKey] = parsedRows;
 
       } catch (err) {
-        log(`❌ Error procesando ${nombre}: ${err.message}`);
-        try {
-          const snap = await driver.getPageSource();
-          fs.writeFileSync(path.join(DEBUG_DIR, `imd_clasif_error_${key}.html`), snap, "utf8");
-        } catch {}
-        continue;
+        log(`   ❌ Error procesando ${team.name}: ${err && err.message ? err.message : err}`);
+        try { fs.writeFileSync(path.join(DEBUG_DIR, `imd_clasif_error_${slugKey}.html`), await driver.getPageSource(), "utf8"); } catch (e) {}
       }
-    }
+    } // end for equipos
 
-    // -----------------------------------------------
-    // GUARDAR JSON FINAL
-    // -----------------------------------------------
-    let existing = {};
-    if (fs.existsSync(OUT_JSON)) {
-      try { existing = JSON.parse(fs.readFileSync(OUT_JSON,"utf8")); } catch {}
-    }
-
-    const merged = { ...existing, ...clasifMap };
-    fs.writeFileSync(OUT_JSON, JSON.stringify(merged, null, 2), "utf8");
-
-    log(`\n✅ Clasificaciones IMD guardadas en ${OUT_JSON}`);
-    log(`   (${Object.keys(clasifMap).length} equipos nuevos)`);
+    // Guardar JSON
+    const outPath = path.join(OUTPUT_DIR, "imd_clasificaciones.json");
+    fs.writeFileSync(outPath, JSON.stringify(resultMap, null, 2), "utf8");
+    log(`✅ Guardadas clasificaciones IMD en: ${outPath} (equipos: ${Object.keys(resultMap).length})`);
 
   } catch (err) {
-    log("❌ ERROR GENERAL: " + err.stack);
+    log("❌ ERROR GENERAL (clasificaciones IMD):", err && err.stack ? err.stack : err);
   } finally {
-    try { await driver.quit(); } catch {}
-    log("🧹 Chrome cerrado");
+    try { await driver.quit(); } catch (e) {}
+    log("🧹 Chrome cerrado (clasificaciones IMD)");
   }
 })();
