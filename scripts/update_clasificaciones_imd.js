@@ -37,16 +37,26 @@ async function selectTabClasificaciones(driver) {
 
 async function selectProvisionales(driver) {
   const sel = await driver.wait(until.elementLocated(By.id("selprov")), 10000);
-  await sel.sendKeys("1"); // valor "1" = PROVISIONALES
-  await driver.sleep(500);
+
+  await driver.executeScript(`
+    const s = arguments[0];
+    s.value = "1"; // PROVISIONALES
+    s.dispatchEvent(new Event('change', { bubbles: true }));
+  `, sel);
+
+  await driver.sleep(1200); // tiempo para el fetch
 }
+
 
 async function parseClasificacion(driver, debugName) {
   try {
     const table = await driver.wait(
-      until.elementLocated(By.css("#tab1 table.tt")),
-      8000
-    );
+  until.elementLocated(
+    By.xpath("//table[contains(., 'Puntos')]")
+  ),
+  8000
+);
+
 
     const rows = await table.findElements(By.css("tbody > tr"));
     if (rows.length < 3) return [];
