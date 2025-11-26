@@ -138,13 +138,25 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name "github-actions[bot]"
 
-          # Mostrar lo que vamos a commitear (debug)
           echo "=== Antes de git add ==="
           ls -la calendarios || true
           ls -la equipos || true
           ls -la index.html || true
 
+          # Añadir cambios (sin fallar si no existen algunas rutas)
           git add calendarios/*.ics index.html equipos/*.html || true
-          git commit -m "Automated update of calendars (IMD multi + FEDERADO + HTML) [ci skip]" || echo "No changes to commit"
-          git push
+
+          # Commit solo si hay cambios
+          git commit -m "Automated update of calendars (IMD multi + FEDERADO + HTML) [ci skip]" || {
+            echo "No changes to commit"
+          }
+
+          # Traer cambios remotos para evitar rejected push
+          git pull --rebase origin main || {
+            echo "No remote changes or rebase not needed"
+          }
+
+          # Push final
+          git push origin main
+
 
