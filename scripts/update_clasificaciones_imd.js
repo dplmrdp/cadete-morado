@@ -103,7 +103,7 @@ async function parseClasificacion(driver, debugName) {
           // usar altName
           const teamName = altName.replace(/^\d+\s*-\s*/, "").trim();
           result.push({
-            equipo: teamName,
+            team: teamName,
             pts: parseInt(vals_textContent[10] || vals_getText[10]) || 0,
             pj: parseInt(vals_textContent[1] || vals_getText[1]) || 0,
             pg: parseInt(vals_textContent[2] || vals_getText[2]) || 0,
@@ -118,7 +118,7 @@ async function parseClasificacion(driver, debugName) {
       const teamName = rawName.replace(/^\d+\s*-\s*/, "").trim();
 
       result.push({
-        equipo: teamName,
+        team: teamName,
         pts: parseInt(vals_textContent[10]) || 0,
         pj: parseInt(vals_textContent[1]) || 0,
         pg: parseInt(vals_textContent[2]) || 0,
