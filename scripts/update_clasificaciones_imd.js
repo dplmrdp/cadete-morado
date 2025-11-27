@@ -50,7 +50,9 @@ async function selectProvisionales(driver) {
 
 async function parseClasificacion(driver, debugName) {
   try {
-    // Esperar tabla de clasificaciones verdadera
+    // =====================
+    // 1. Esperar a la tabla
+    // =====================
     const table = await driver.wait(
       until.elementLocated(
         By.xpath("//table[contains(., 'Equipo') and contains(., 'Puntos')]")
@@ -58,7 +60,7 @@ async function parseClasificacion(driver, debugName) {
       12000
     );
 
-    // Esperar a que la primera fila tenga un NOMBRE real
+    // Esperar a que aparezcan filas con nombres reales (no "Equipo")
     await driver.wait(
       until.elementLocated(
         By.xpath("//table[contains(., 'Puntos')]//tbody/tr/td[1][string-length(normalize-space()) > 1]")
@@ -68,106 +70,124 @@ async function parseClasificacion(driver, debugName) {
 
     const rows = await table.findElements(By.css("tbody > tr"));
     const result = [];
-
-    // Guardaremos un array con debug por fila
     const debugRows = [];
 
+    log(`DEBUG ${debugName} -> detectadas ${rows.length} filas en <tbody>`);
+
+    // ==========================================================
+    // 2. Procesar cada fila del tbody
+    // ==========================================================
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const cols = await row.findElements(By.css("td"));
-      if (cols.length < 11) continue;
 
-      // Leer mediante textContent (atributo) y via getText() para comparar
-      const vals_textContent = await Promise.all(cols.map(c => c.getAttribute("textContent")));
+      // Filtrar filas no válidas
+      if (cols.length < 11) {
+        log(`DEBUG ${debugName} row ${i}: ignorada por tener ${cols.length} columnas`);
+        continue;
+      }
+
+      // Leer texto vía textContent y vía getText()
+      const vals_textContent = await Promise.all(
+        cols.map(c => c.getAttribute("textContent"))
+      );
       const vals_getText = await Promise.all(cols.map(c => c.getText()));
 
-      // Registrar en log
-      log(`DEBUG ${debugName} row ${i} textContent: ${JSON.stringify(vals_textContent)}`);
-      log(`DEBUG ${debugName} row ${i} getText    : ${JSON.stringify(vals_getText)}`);
+      // Registrar debug estructurado
+      const clean_textContent = vals_textContent.map(v => v ? v.trim() : "");
+      const clean_getText = vals_getText.map(v => v ? v.trim() : "");
 
-      // Guardar estructura para dump
       debugRows.push({
         row_index: i,
-        textContent: vals_textContent.map(v => v ? v.trim() : v),
-        getText: vals_getText.map(v => v ? v.trim() : v)
+        textContent: clean_textContent,
+        getText: clean_getText
       });
 
-      const rawName = (vals_textContent[0] || "").trim();
+      // Nombre original
+      const rawName = clean_textContent[0] || clean_getText[0] || "";
 
-// ❗ FILTRAR LA FILA "Equipo"
-if (rawName.toLowerCase() === "equipo") {
-  log(`SKIP ${debugName} row ${i}: fila 'Equipo' (cabecera interna)`);
-  continue;
-}
+      // =======================================
+      // 3. Filtrar fila fantasma "Equipo"
+      // =======================================
+      if (rawName.toLowerCase() === "equipo") {
+        log(`SKIP ${debugName} row ${i}: fila de cabecera interna 'Equipo'`);
+        continue;
+      }
 
-if (!rawName) {
-  const altName = (vals_getText[0] || "").trim();
-  if (!altName) {
-    log(`WARNING ${debugName} row ${i} -> nombre vacío en textContent y getText`);
-    continue;
-  } else {
-    const teamName = altName.replace(/^\d+\s*-\s*/, "").trim();
-    result.push({
-      team: teamName,
-      pts: parseInt(vals_textContent[10] || vals_getText[10]) || 0,
-      pj: parseInt(vals_textContent[1] || vals_getText[1]) || 0,
-      pg: parseInt(vals_textContent[2] || vals_getText[2]) || 0,
-      pp: parseInt(vals_textContent[4] || vals_getText[4]) || 0,
-      sg: parseInt(vals_textContent[6] || vals_getText[6]) || 0,
-      sp: parseInt(vals_textContent[7] || vals_getText[7]) || 0,
-    });
-    continue;
-  }
-}
+      // Si nombre está vacío, descartar
+      if (!rawName) {
+        log(`SKIP ${debugName} row ${i}: nombre vacío`);
+        continue;
+      }
 
-const teamName = rawName.replace(/^\d+\s*-\s*/, "").trim();
+      // Limpiar nombre → quitar "1 - " o "3 - " delante
+      const teamName = rawName.replace(/^\d+\s*-\s*/, "").trim();
 
-result.push({
-  team: teamName,
-  pts: parseInt(vals_textContent[10]) || 0,
-  pj: parseInt(vals_textContent[1]) || 0,
-  pg: parseInt(vals_textContent[2]) || 0,
-  pp: parseInt(vals_textContent[4]) || 0,
-  sg: parseInt(vals_textContent[6]) || 0,
-  sp: parseInt(vals_textContent[7]) || 0,
-});
+      // =======================================
+      // 4. Parsear números (robusto)
+      // =======================================
+      const getNum = (idx) =>
+        parseInt(clean_textContent[idx]) ||
+        parseInt(clean_getText[idx]) ||
+        0;
 
+      result.push({
+        team: teamName,
+        pts: getNum(10),
+        pj: getNum(1),
+        pg: getNum(2),
+        pp: getNum(4),
+        sg: getNum(6),   // sets ganados
+        sp: getNum(7)    // sets perdidos
+      });
+    }
 
-    // Guardar debug por equipo (page source + rows)
+    // ===============================
+    // 5. Guardar archivo de debug
+    // ===============================
     try {
       const dump = {
         debugName,
         rows_count: rows.length,
+        result_count: result.length,
         rows: debugRows,
-        pageSourceSnippet: (await driver.getPageSource()).slice(0, 20000) // primer trozo
+        pageSourceSnippet: (await driver.getPageSource()).slice(0, 20000)
       };
-      fs.writeFileSync(
-        path.join(DEBUG_DIR, `imd_clasif_debug_${debugName}.json`),
-        JSON.stringify(dump, null, 2),
-        "utf8"
+
+      const filePath = path.join(
+        DEBUG_DIR,
+        `imd_clasif_debug_${debugName}.json`
       );
-      log(`DEBUG file written: ${path.join(DEBUG_DIR, `imd_clasif_debug_${debugName}.json`)}`);
+
+      fs.writeFileSync(filePath, JSON.stringify(dump, null, 2), "utf8");
+      log(`DEBUG file written: ${filePath}`);
     } catch (e) {
       log(`ERROR writing debug file for ${debugName}: ${e}`);
     }
 
+    // ===============================
+    // 6. Devolver resultados reales
+    // ===============================
     return result;
   } catch (err) {
+    // Guardar HTML completo en caso de fallo
     try {
       const page = await driver.getPageSource();
-      fs.writeFileSync(
-        path.join(DEBUG_DIR, `imd_clasif_error_${debugName}.html`),
-        page,
-        "utf8"
+      const filePath = path.join(
+        DEBUG_DIR,
+        `imd_clasif_error_${debugName}.html`
       );
-      log(`WROTE error HTML: ${path.join(DEBUG_DIR, `imd_clasif_error_${debugName}.html`)}`);
-    } catch (ee) {
-      log(`ERROR saving error html: ${ee}`);
+      fs.writeFileSync(filePath, page, "utf8");
+      log(`WROTE error HTML: ${filePath}`);
+    } catch (e2) {
+      log(`ERROR saving error HTML: ${e2}`);
     }
+
     log(`parseClasificacion exception for ${debugName}: ${err}`);
     return [];
   }
 }
+
 
 (async () => {
   log("🌼 Iniciando obtención de clasificaciones IMD…");
