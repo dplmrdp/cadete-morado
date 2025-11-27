@@ -93,40 +93,45 @@ async function parseClasificacion(driver, debugName) {
       });
 
       const rawName = (vals_textContent[0] || "").trim();
-      if (!rawName) {
-        // si textContent vacío, intentar con getText() antes de abandonar
-        const altName = (vals_getText[0] || "").trim();
-        if (!altName) {
-          log(`WARNING ${debugName} row ${i} -> nombre vacío en textContent y getText`);
-          continue;
-        } else {
-          // usar altName
-          const teamName = altName.replace(/^\d+\s*-\s*/, "").trim();
-          result.push({
-            team: teamName,
-            pts: parseInt(vals_textContent[10] || vals_getText[10]) || 0,
-            pj: parseInt(vals_textContent[1] || vals_getText[1]) || 0,
-            pg: parseInt(vals_textContent[2] || vals_getText[2]) || 0,
-            pp: parseInt(vals_textContent[4] || vals_getText[4]) || 0,
-            sg: parseInt(vals_textContent[6] || vals_getText[6]) || 0,
-            sp: parseInt(vals_textContent[7] || vals_getText[7]) || 0,
-          });
-          continue;
-        }
-      }
 
-      const teamName = rawName.replace(/^\d+\s*-\s*/, "").trim();
+// ❗ FILTRAR LA FILA "Equipo"
+if (rawName.toLowerCase() === "equipo") {
+  log(`SKIP ${debugName} row ${i}: fila 'Equipo' (cabecera interna)`);
+  continue;
+}
 
-      result.push({
-        team: teamName,
-        pts: parseInt(vals_textContent[10]) || 0,
-        pj: parseInt(vals_textContent[1]) || 0,
-        pg: parseInt(vals_textContent[2]) || 0,
-        pp: parseInt(vals_textContent[4]) || 0,
-        sg: parseInt(vals_textContent[6]) || 0,
-        sp: parseInt(vals_textContent[7]) || 0,
-      });
-    }
+if (!rawName) {
+  const altName = (vals_getText[0] || "").trim();
+  if (!altName) {
+    log(`WARNING ${debugName} row ${i} -> nombre vacío en textContent y getText`);
+    continue;
+  } else {
+    const teamName = altName.replace(/^\d+\s*-\s*/, "").trim();
+    result.push({
+      team: teamName,
+      pts: parseInt(vals_textContent[10] || vals_getText[10]) || 0,
+      pj: parseInt(vals_textContent[1] || vals_getText[1]) || 0,
+      pg: parseInt(vals_textContent[2] || vals_getText[2]) || 0,
+      pp: parseInt(vals_textContent[4] || vals_getText[4]) || 0,
+      sg: parseInt(vals_textContent[6] || vals_getText[6]) || 0,
+      sp: parseInt(vals_textContent[7] || vals_getText[7]) || 0,
+    });
+    continue;
+  }
+}
+
+const teamName = rawName.replace(/^\d+\s*-\s*/, "").trim();
+
+result.push({
+  team: teamName,
+  pts: parseInt(vals_textContent[10]) || 0,
+  pj: parseInt(vals_textContent[1]) || 0,
+  pg: parseInt(vals_textContent[2]) || 0,
+  pp: parseInt(vals_textContent[4]) || 0,
+  sg: parseInt(vals_textContent[6]) || 0,
+  sp: parseInt(vals_textContent[7]) || 0,
+});
+
 
     // Guardar debug por equipo (page source + rows)
     try {
