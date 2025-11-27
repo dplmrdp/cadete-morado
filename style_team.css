@@ -1,5 +1,7 @@
-/* style_team.css - Compacto y uniforme para FEDERADO e IMD */
-
+/* ============================================================
+   BASE GENERAL
+   Tipografía, colores y contenedor
+   ============================================================ */
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
   color: #222;
@@ -8,166 +10,229 @@ body {
   background: #fff;
 }
 
-.container { max-width: 980px; margin: 12px auto; padding: 12px; }
+.container {
+  max-width: 980px;
+  margin: 12px auto;
+  padding: 12px;
+}
 
-.team-header { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
-.team-page-icon { width: 56px; height: 56px; object-fit: contain; }
-.team-header-text h1 { margin: 0; font-size: 18px; }
-.team-header-text .meta { margin: 2px 0 0 0; font-size: 13px; color: #555; }
+/* ============================================================
+   ENCABEZADO DEL EQUIPO
+   Imagen + nombre + categoría
+   ============================================================ */
+.team-header {
+  display: flex;
+  gap: 12px;               /* espacio horizontal entre icono y texto */
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.team-page-icon {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.team-header-text h1 {
+  margin: 0
+;
+  font-size: 18px;         /* tamaño del nombre */
+}
+
+.team-header-text .meta {
+  margin: 1px 0 0 0;
+  font-size: 13px;         /* tamaño de categoría */
+  color: #555;
+}
 
 /* Botón volver */
-.volver { display: inline-block; margin-bottom: 8px; color: #333; text-decoration: none; font-size: 13px; }
+.volver {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #156a92;
+  text-decoration: none;
+  font-size: 14px;
+}
 
-/* Clasificación - tabla compacta */
+/* ============================================================
+   TABLA DE CLASIFICACIÓN (ESCRITORIO)
+   ============================================================ */
 table.clasificacion {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;     /* permite ancho controlado por nth-child */
   font-size: 13px;
   margin: 8px 0 14px 0;
 }
+
+/* Cabecera */
 table.clasificacion thead th {
-  background: #f0f2f4;
-  padding: 5px 6px;
+  background: #e0e4e7;
   border-bottom: 1px solid #d8d8d8;
   text-align: center;
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 13px;
+  padding: 2px 2px;
 }
+
+/* Celdas */
 table.clasificacion tbody td {
-  padding: 4px 6px;
   border-bottom: 1px solid #f0f0f0;
-  vertical-align: middle;
-}
-table.clasificacion tbody tr:nth-child(even) { background: #fbfbfb; }
-table.clasificacion td:nth-child(1) { text-align: center; width: 36px; }
-table.clasificacion td:nth-child(2) { text-align: left; }
-table.clasificacion td:nth-child(n+3) { text-align: right; }
-
-/* Próximos partidos */
-.partido { padding: 6px 0; border-bottom: 1px dashed #eee; }
-.partido .fecha { font-weight: 600; font-size: 13px; color: #333; }
-.partido .vs { margin-top: 3px; font-size: 14px; color: #111; }
-.partido .lugar, .partido .desc { font-size: 12px; color: #555; margin-top: 4px; }
-
-/* Subscripción */
-.boton-subs { display: inline-block; margin-top: 8px; padding: 6px 10px; background: #e3ecde; border-radius: 6px; text-decoration: none; color: #0a5; font-weight: 600; }
-
-/* Responsive */
-@media (max-width: 640px) {
-  .container { padding: 10px; }
-  .team-page-icon { width: 48px; height: 48px; }
-  table.clasificacion thead th { font-size: 12px; padding: 4px 6px; }
-  table.clasificacion { font-size: 12px; }
-}
-/* ===== Ajustes tabla: anchos, alineación y no-wrap para números ===== */
-table.clasificacion {
-  width: 100%;
-  border-collapse: collapse;
-  /* Usamos layout fixed para que respeten las anchuras que definamos */
-  table-layout: fixed;
-  font-size: 13px;
-  margin: 8px 0 14px 0;
-}
-
-/* Unificar box-model y paddings para que thead y tbody coincidan exactamente */
-table.clasificacion th,
-table.clasificacion td {
-  box-sizing: border-box;
-  padding: 8px 10px;          /* aumenta altura y mantiene alineación */
+  padding: 2px 2px;
   vertical-align: middle;
 }
 
-/* Cabecera: números alineados a la derecha, título del equipo a la izquierda */
-table.clasificacion thead th {
-  background: #f0f2f4;
-  border-bottom: 1px solid #d8d8d8;
-  font-weight: 600;
-  font-size: 13px;
-  color: #333;
+/* Zebra */
+table.clasificacion tbody tr:nth-child(even) {
+  background: #fbfbfb;
 }
 
-/* Definimos anchos explícitos para evitar que el navegador los calcule mal */
+/* === ANCHOS POR COLUMNA === */
+
+/* Columna 1: Equipo (muy ancha) */
 table.clasificacion th:nth-child(1),
 table.clasificacion td:nth-child(1) {
-  width: 46%;            /* columna Equipo: la más ancha */
-  text-align: left;      /* nombres a la izquierda */
+  width: 46%;               /* mayor parte del ancho */
+  text-align: left;         /* nombres alineados a la izquierda */
   padding-left: 12px;
+  font-weight: 600;
 }
 
-/* Columnas numéricas: anchos iguales y no-wrap para que no salten de columna */
+/* Columnas numéricas: compactas, alineadas a derecha */
 table.clasificacion th:nth-child(n+2),
 table.clasificacion td:nth-child(n+2) {
-  width: auto;           /* el resto reparte el 54% restante */
+  width: 9%;                /* ajustable: 7%–10% según gusto */
   text-align: right;
-  white-space: nowrap;   /* evita que  "150" se rompa en dos líneas */
+  white-space: nowrap;      /* evita saltos de línea en números */
   padding-right: 12px;
 }
 
-/* Si quieres columnas numéricas con ancho fijo (opcional) */
-table.clasificacion th:nth-child(n+2),
-table.clasificacion td:nth-child(n+2) {
-  width: 9%;             /* prueba 9% por columna y ajusta si hace falta */
+/* ============================================================
+   PRÓXIMOS PARTIDOS
+   ============================================================ */
+.partido {
+  padding: 4px 0;
+  border-bottom: 1px dashed #eee;
 }
 
-/* Zebra y separación */
-table.clasificacion tbody tr:nth-child(even) { background: #fbfbfb; }
-table.clasificacion tbody td { border-bottom: 1px solid #f0f0f0; }
+.partido .fecha {
+  font-weight: 600;
+  font-size: 13px;
+  color: #156a92;
+}
 
-/* Responsive: en pantallas pequeñas la primera columna ocupa más y se permite wrap */
+.partido .vs {
+  margin-top: 1px;
+  font-size: 14px;
+  color: #111;
+}
+
+.partido .lugar,
+.partido .desc {
+  font-size: 11px;
+  color: #555;
+  margin-top: 2px;
+}
+
+/* ============================================================
+   BOTÓN SUSCRIPCIÓN
+   ============================================================ */
+.boton-subs {
+  display: inline-block;
+  margin-top: 1px;
+  padding: 3px 4px;
+  background: #d5e0e6;
+  border-radius: 6px;
+  text-decoration: none;
+  color: rgb(71, 71, 71);
+  font-weight: 500;
+}
+
+.disclaimer {
+  font-size: 10px;     /* ← CAMBIAR AQUÍ */
+  color: #666;         /* gris suave */
+  line-height: 1.2;    /* separación vertical */
+  margin-top: 4px;     /* separación respecto al botón */
+}
+
+
+/* ============================================================
+   RESPONSIVE GENERAL (≤ 640px)
+   ============================================================ */
 @media (max-width: 640px) {
-  table.clasificacion { table-layout: auto; font-size: 12px; }
+
+  .container { padding: 10px; }
+
+  /* Icono más compacto */
+  .team-page-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  /* Tabla más compacta */
+  table.clasificacion {
+    font-size: 12px;
+    table-layout: auto;       /* más flexible en pantallas medianas */
+  }
+
+  table.clasificacion thead th {
+    font-size: 12px;
+    padding: 4px 6px;
+  }
+
+  /* Primera columna ocupa más */
   table.clasificacion th:nth-child(1),
   table.clasificacion td:nth-child(1) {
     width: 60%;
   }
+
+  /* Numéricas más equilibradas en móvil medio */
   table.clasificacion th:nth-child(n+2),
   table.clasificacion td:nth-child(n+2) {
-    white-space: normal; /* permitir que se envuelva si falta espacio */
-    text-align: center;
     width: auto;
+    text-align: center;
+    white-space: normal;       /* permitir salto si hace falta */
   }
 }
-/* =====================================================================
-   MODO MÓVIL: optimización para pantallas verticales pequeñas (< 480px)
-   ===================================================================== */
+
+/* ============================================================
+   MÓVIL PEQUEÑO (≤ 480px) – MODO VERTICAL
+   Especialmente útil para Android/iPhone
+   ============================================================ */
 @media (max-width: 480px) {
 
-  /* Letra ligeramente más pequeña */
+  /* Tabla ultra-compacta */
   table.clasificacion {
     font-size: 11px;
-    table-layout: auto;   /* más flexible en móvil */
+    table-layout: auto;
   }
 
   table.clasificacion th,
   table.clasificacion td {
-    padding: 6px 4px;     /* más compacto */
+    padding: 6px 4px;
   }
 
-  /* Columna Equipo ocupa casi todo el ancho */
+  /* Columna Equipo: dominante, multi-línea */
   table.clasificacion th:nth-child(1),
   table.clasificacion td:nth-child(1) {
     width: 58%;
+    white-space: normal;
     text-align: left;
-    white-space: normal;  /* permitir que se parta en varias líneas */
     font-weight: 600;
-    padding-right: 6px;
   }
 
-  /* Columnas numéricas: estrechas y centradas */
+  /* Columnas numéricas */
   table.clasificacion th:nth-child(n+2),
   table.clasificacion td:nth-child(n+2) {
     width: 8%;
     text-align: center;
-    white-space: nowrap;  /* no partir números */
+    white-space: nowrap;
     padding-left: 0;
     padding-right: 0;
   }
 
-  /* Reducir margen general para encajar mejor */
-  .container {
-    padding: 6px;
-  }
-
-  /* Ajuste del header */
+  /* Header más compacto */
   .team-header {
     gap: 8px;
     margin-bottom: 6px;
@@ -176,6 +241,7 @@ table.clasificacion tbody td { border-bottom: 1px solid #f0f0f0; }
   .team-header-text h1 {
     font-size: 16px;
   }
+
   .team-header-text .meta {
     font-size: 11px;
   }
