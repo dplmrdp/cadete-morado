@@ -61,7 +61,7 @@ async function parseClasificacion(driver, debugName) {
     // Esperar a que la primera fila tenga un NOMBRE real
     await driver.wait(
       until.elementLocated(
-        By.xpath("//table[contains(., 'Puntos')]//tbody/tr/td[1][string-length(normalize-space()) > 3]")
+        By.xpath("//table[contains(., 'Puntos')]//tbody/tr/td[1][string-length(normalize-space()) > 1]")
       ),
       12000
     );
@@ -69,39 +69,97 @@ async function parseClasificacion(driver, debugName) {
     const rows = await table.findElements(By.css("tbody > tr"));
     const result = [];
 
-    for (const row of rows) {
+    // Guardaremos un array con debug por fila
+    const debugRows = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
       const cols = await row.findElements(By.css("td"));
       if (cols.length < 11) continue;
 
-      // Nota: textContent es más fiable en IMD
-      const vals = await Promise.all(cols.map(c => c.getAttribute("textContent")));
+      // Leer mediante textContent (atributo) y via getText() para comparar
+      const vals_textContent = await Promise.all(cols.map(c => c.getAttribute("textContent")));
+      const vals_getText = await Promise.all(cols.map(c => c.getText()));
 
-      const rawName = vals[0].trim();
-      if (!rawName) continue;
+      // Registrar en log
+      log(`DEBUG ${debugName} row ${i} textContent: ${JSON.stringify(vals_textContent)}`);
+      log(`DEBUG ${debugName} row ${i} getText    : ${JSON.stringify(vals_getText)}`);
+
+      // Guardar estructura para dump
+      debugRows.push({
+        row_index: i,
+        textContent: vals_textContent.map(v => v ? v.trim() : v),
+        getText: vals_getText.map(v => v ? v.trim() : v)
+      });
+
+      const rawName = (vals_textContent[0] || "").trim();
+      if (!rawName) {
+        // si textContent vacío, intentar con getText() antes de abandonar
+        const altName = (vals_getText[0] || "").trim();
+        if (!altName) {
+          log(`WARNING ${debugName} row ${i} -> nombre vacío en textContent y getText`);
+          continue;
+        } else {
+          // usar altName
+          const teamName = altName.replace(/^\d+\s*-\s*/, "").trim();
+          result.push({
+            equipo: teamName,
+            pts: parseInt(vals_textContent[10] || vals_getText[10]) || 0,
+            pj: parseInt(vals_textContent[1] || vals_getText[1]) || 0,
+            pg: parseInt(vals_textContent[2] || vals_getText[2]) || 0,
+            pp: parseInt(vals_textContent[4] || vals_getText[4]) || 0,
+            sg: parseInt(vals_textContent[6] || vals_getText[6]) || 0,
+            sp: parseInt(vals_textContent[7] || vals_getText[7]) || 0,
+          });
+          continue;
+        }
+      }
 
       const teamName = rawName.replace(/^\d+\s*-\s*/, "").trim();
 
       result.push({
         equipo: teamName,
-        pts: parseInt(vals[10]) || 0,
-        pj: parseInt(vals[1]) || 0,
-        pg: parseInt(vals[2]) || 0,
-        pp: parseInt(vals[4]) || 0,
-        sg: parseInt(vals[6]) || 0,
-        sp: parseInt(vals[7]) || 0,
+        pts: parseInt(vals_textContent[10]) || 0,
+        pj: parseInt(vals_textContent[1]) || 0,
+        pg: parseInt(vals_textContent[2]) || 0,
+        pp: parseInt(vals_textContent[4]) || 0,
+        sg: parseInt(vals_textContent[6]) || 0,
+        sp: parseInt(vals_textContent[7]) || 0,
       });
     }
 
-    return result;
-
-  } catch (err) {
+    // Guardar debug por equipo (page source + rows)
     try {
+      const dump = {
+        debugName,
+        rows_count: rows.length,
+        rows: debugRows,
+        pageSourceSnippet: (await driver.getPageSource()).slice(0, 20000) // primer trozo
+      };
       fs.writeFileSync(
-        path.join(DEBUG_DIR, `imd_clasif_error_${debugName}.html`),
-        await driver.getPageSource(),
+        path.join(DEBUG_DIR, `imd_clasif_debug_${debugName}.json`),
+        JSON.stringify(dump, null, 2),
         "utf8"
       );
-    } catch {}
+      log(`DEBUG file written: ${path.join(DEBUG_DIR, `imd_clasif_debug_${debugName}.json`)}`);
+    } catch (e) {
+      log(`ERROR writing debug file for ${debugName}: ${e}`);
+    }
+
+    return result;
+  } catch (err) {
+    try {
+      const page = await driver.getPageSource();
+      fs.writeFileSync(
+        path.join(DEBUG_DIR, `imd_clasif_error_${debugName}.html`),
+        page,
+        "utf8"
+      );
+      log(`WROTE error HTML: ${path.join(DEBUG_DIR, `imd_clasif_error_${debugName}.html`)}`);
+    } catch (ee) {
+      log(`ERROR saving error html: ${ee}`);
+    }
+    log(`parseClasificacion exception for ${debugName}: ${err}`);
     return [];
   }
 }
