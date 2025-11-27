@@ -50,49 +50,50 @@ async function selectProvisionales(driver) {
 
 async function parseClasificacion(driver, debugName) {
   try {
+    // Esperar tabla de clasificaciones verdadera
     const table = await driver.wait(
-  until.elementLocated(
-    By.xpath("//table[contains(., 'Puntos')]")
-  ),
-  8000
-);
+      until.elementLocated(
+        By.xpath("//table[contains(., 'Equipo') and contains(., 'Puntos')]")
+      ),
+      12000
+    );
 
+    // Esperar a que la primera fila tenga un NOMBRE real
+    await driver.wait(
+      until.elementLocated(
+        By.xpath("//table[contains(., 'Puntos')]//tbody/tr/td[1][string-length(normalize-space()) > 3]")
+      ),
+      12000
+    );
 
     const rows = await table.findElements(By.css("tbody > tr"));
-    if (rows.length < 3) return [];
-
     const result = [];
 
-    // Skip header rows → start at row >=2
-    for (let i = 2; i < rows.length; i++) {
-      const cols = await rows[i].findElements(By.css("td"));
+    for (const row of rows) {
+      const cols = await row.findElements(By.css("td"));
       if (cols.length < 11) continue;
 
-      const vals = await Promise.all(cols.map(c => c.getText()));
+      // Nota: textContent es más fiable en IMD
+      const vals = await Promise.all(cols.map(c => c.getAttribute("textContent")));
 
-      const teamName = vals[0].replace(/^\s*\d+\s*-\s*/, "").trim();
-      const PJ = parseInt(vals[1]) || 0;
-      const PG = parseInt(vals[2]) || 0;
-      const PE = parseInt(vals[3]) || 0;
-      const PP = parseInt(vals[4]) || 0;
-      const JF = parseInt(vals[6]) || 0;
-      const JC = parseInt(vals[7]) || 0;
-      const TF = parseInt(vals[8]) || 0;
-      const TC = parseInt(vals[9]) || 0;
-      const Puntos = parseInt(vals[10]) || 0;
+      const rawName = vals[0].trim();
+      if (!rawName) continue;
+
+      const teamName = rawName.replace(/^\d+\s*-\s*/, "").trim();
 
       result.push({
         equipo: teamName,
-        pts: Puntos,
-        pj: PJ,
-        pg: PG,
-        pp: PP,
-        sg: JF, // sets ganados
-        sp: JC  // sets perdidos
+        pts: parseInt(vals[10]) || 0,
+        pj: parseInt(vals[1]) || 0,
+        pg: parseInt(vals[2]) || 0,
+        pp: parseInt(vals[4]) || 0,
+        sg: parseInt(vals[6]) || 0,
+        sp: parseInt(vals[7]) || 0,
       });
     }
 
     return result;
+
   } catch (err) {
     try {
       fs.writeFileSync(
