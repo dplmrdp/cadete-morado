@@ -144,7 +144,7 @@ jobs:
           ls -la index.html || true
 
           # Añadir cambios (sin fallar si no existen algunas rutas)
-          git add calendarios/*.ics index.html equipos/*.html || true
+          git add calendarios/*.ics calendarios/imd_clasificaciones.json index.html equipos/*.html || true
 
           # Commit solo si hay cambios
           git commit -m "Automated update of calendars (IMD multi + FEDERADO + HTML) [ci skip]" || {
