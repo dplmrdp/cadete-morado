@@ -261,7 +261,7 @@ table.clasificacion td:nth-child(n+2) {
    =============================== */
 
 table.clasificacion tr.own-team {
-  background: #fff8d9 !important;  /* amarillo suave */
+  background: #c9ebf0 !important;  /* amarillo suave */
   font-weight: 700;
 }
 
@@ -271,7 +271,7 @@ table.clasificacion tr.own-team td {
 
 /* Borde lateral para destacarlo mejor */
 table.clasificacion tr.own-team td:first-child {
-  border-left: 4px solid #e5c100;
+  border-left: 4px solid #5b97a0;
   padding-left: 8px;
 }
 
