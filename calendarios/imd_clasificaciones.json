@@ -595,7 +595,7 @@
     {
       "team": "CD ADRIANO",
       "pts": 6,
-      "pj": 3,
+      "pj": 4,
       "pg": 3,
       "pp": 0,
       "sg": 9,
@@ -604,16 +604,25 @@
     {
       "team": "CD ARBOLEDA NEGRO",
       "pts": 6,
-      "pj": 3,
+      "pj": 4,
       "pg": 3,
       "pp": 0,
       "sg": 8,
       "sp": 1
     },
     {
+      "team": "C.D.MARISTAS SEVILLA CELESTE",
+      "pts": 6,
+      "pj": 4,
+      "pg": 2,
+      "pp": 2,
+      "sg": 7,
+      "sp": 5
+    },
+    {
       "team": "VOLEIBOL MIGUEL SERVET",
       "pts": 5,
-      "pj": 3,
+      "pj": 4,
       "pg": 2,
       "pp": 1,
       "sg": 7,
@@ -622,47 +631,38 @@
     {
       "team": "GOLDEN A",
       "pts": 5,
-      "pj": 3,
+      "pj": 4,
       "pg": 2,
       "pp": 1,
       "sg": 5,
       "sp": 4
     },
     {
-      "team": "C.D.MARISTAS SEVILLA CELESTE",
-      "pts": 4,
-      "pj": 3,
-      "pg": 1,
-      "pp": 2,
-      "sg": 4,
-      "sp": 5
-    },
-    {
       "team": "SITTING VOLLEY SEVILLA",
       "pts": 4,
-      "pj": 3,
+      "pj": 4,
       "pg": 1,
       "pp": 2,
       "sg": 2,
       "sp": 7
     },
     {
+      "team": "CD SALESIANOS TRINIDAD AMARILLO",
+      "pts": 4,
+      "pj": 4,
+      "pg": 0,
+      "pp": 4,
+      "sg": 0,
+      "sp": 12
+    },
+    {
       "team": "EVB LAS FLORES ALBERO",
       "pts": 3,
-      "pj": 3,
+      "pj": 4,
       "pg": 0,
       "pp": 3,
       "sg": 1,
       "sp": 8
-    },
-    {
-      "team": "CD SALESIANOS TRINIDAD AMARILLO",
-      "pts": 3,
-      "pj": 3,
-      "pg": 0,
-      "pp": 3,
-      "sg": 0,
-      "sp": 9
     }
   ],
   "imd_infantil_femenino_evb_las_flores_albero": [
