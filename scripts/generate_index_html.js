@@ -429,7 +429,7 @@ async function generateHTML(calendars, federadoMap) {
 
   if (!fs.existsSync(EQUIPOS_DIR)) fs.mkdirSync(EQUIPOS_DIR, { recursive: true });
 
-  let html = `<!DOCTYPE html>
+let html = `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -438,58 +438,60 @@ async function generateHTML(calendars, federadoMap) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 </head>
 <body>
-<div class="container">
-<h1>Calendarios C.D. Las Flores</h1>
+
+<div class="index-app-container">
+  <h1 class="index-title">Calendarios C.D. Las Flores</h1>
 `;
 
-  for (const category of CATEGORIES_ORDER) {
-    if (!calendars[category]) continue;
+for (const category of CATEGORIES_ORDER) {
+  if (!calendars[category]) continue;
 
-    html += `<section class="category-block"><h2 class="category-title">${category}</h2>`;
+  html += `
+  <section class="category-card">
+    <h2 class="category-card-title">${category}</h2>
+  `;
 
-    for (const comp of ["FEDERADO", "IMD"]) {
-      const teams = calendars[category][comp];
-      if (!teams || !teams.length) continue;
+  // FEDERADO / IMD
+  for (const comp of ["FEDERADO", "IMD"]) {
+    const teams = calendars[category][comp];
+    if (!teams || !teams.length) continue;
 
-      html += `<div class="competition"><h3 class="competition-title">${comp}</h3><ul class="team-list">`;
-      teams.sort(sortTeams);
+    html += `
+    <div class="competition-block">
+      <h3 class="competition-block-title">${comp}</h3>
+      <ul class="team-list-simple">
+    `;
 
-      for (const { team, urlPath, filename, slug } of teams) {
-        const icon = getIconForTeam(team);
-        const equipoPage = `equipos/${slug}.html`;
+    teams.sort(sortTeams);
 
-        const key = slug;
-        const federadoInfo = (federadoMap && federadoMap[key]) ? federadoMap[key] : null;
+    for (const { team, slug } of teams) {
+      const icon = getIconForTeam(team);
+      const equipoPage = `equipos/${slug}.html`;
 
-        await generateTeamPage({
-          team,
-          category,
-          competition: comp,
-          urlPath,
-          slug,
-          iconPath: icon,
-          federadoInfo,
-          federadoCache,
-          imdClasifMap
-        });
-
-        html += `
-<li class="team-item">
-  <img class="team-icon" src="${icon}" alt="${escapeHtml(team)}" />
-  <a class="team-link" href="${equipoPage}">${escapeHtml(team)}</a>
-</li>`;
-      }
-
-      html += `</ul></div>`;
+      html += `
+        <li class="team-row">
+          <img class="team-row-icon" src="${icon}" alt="${escapeHtml(team)}" />
+          <a href="${equipoPage}" class="team-row-name">${escapeHtml(team)}</a>
+        </li>
+      `;
     }
 
-    html += `</section>`;
+    html += `
+      </ul>
+    </div>
+    `;
   }
 
   html += `
+  </section>
+  `;
+}
+
+html += `
 </div>
 </body>
 </html>`;
+
 
   fs.writeFileSync(OUTPUT_HTML, html, "utf8");
   console.log("✅ index.html generado correctamente.");
