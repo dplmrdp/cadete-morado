@@ -496,6 +496,173 @@ async function generateHTML(calendars, federadoMap) {
 }
 
 // =======================================================
+//  Unfold ICS lines
+// =======================================================
+function unfoldICSLines(icsText) {
+  return icsText.replace(/\r?\n[ \t]/g, "");
+}
+
+// =======================================================
+//  Parse ICS datetime → { date, allDay }
+// =======================================================
+function parseICSDateToken(token, value) {
+  const isAllDay = /VALUE=DATE/i.test(token);
+  const v = (value || "").trim();
+  if (!v) return null;
+
+  // 20251129 (all-day)
+  if (isAllDay || /^\d{8}$/.test(v)) {
+    const yyyy = v.slice(0, 4);
+    const mm = v.slice(4, 6);
+    const dd = v.slice(6, 8);
+    return { date: new Date(`${yyyy}-${mm}-${dd}T00:00:00`), allDay: true };
+  }
+
+  // 20251129T173000
+  const m = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?$/);
+  if (!m) {
+    const m2 = v.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})$/);
+    if (m2) {
+      const [_, yyyy, mm, dd, hh, min] = m2;
+      return { date: new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:00`), allDay: false };
+    }
+    return null;
+  }
+
+  const [_, yyyy, mm, dd, hh, min, sec] = m;
+  const seconds = sec || "00";
+  return { date: new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:${seconds}`), allDay: false };
+}
+
+// =======================================================
+// Decode ICS text fields
+// =======================================================
+function decodeICSText(s) {
+  if (!s) return "";
+  return s
+    .replace(/\\n/g, "\n")
+    .replace(/\\, /g, ", ")
+    .replace(/\\,/g, ",")
+    .replace(/\\;/g, ";")
+    .trim();
+}
+
+// =======================================================
+// Parse ICS → event list
+// =======================================================
+function parseICS(icsText) {
+  const txt = unfoldICSLines(icsText || "");
+  const lines = txt.split(/\r?\n/);
+
+  const events = [];
+  let cur = null;
+  let inEvent = false;
+
+  for (const line of lines) {
+    if (!line) continue;
+
+    if (/^BEGIN:VEVENT/i.test(line)) {
+      inEvent = true;
+      cur = { summary: "", location: "", description: "", start: null, end: null, allDay: false };
+      continue;
+    }
+    if (/^END:VEVENT/i.test(line)) {
+      inEvent = false;
+      if (cur && cur.start) {
+        if (!cur.end && cur.allDay) {
+          cur.end = new Date(cur.start.getTime() + 24 * 3600 * 1000);
+        }
+        events.push(cur);
+      }
+      cur = null;
+      continue;
+    }
+    if (!inEvent || !cur) continue;
+
+    const idx = line.indexOf(":");
+    if (idx === -1) continue;
+
+    const key = line.slice(0, idx);
+    const val = line.slice(idx + 1);
+
+    if (/^DTSTART/i.test(key)) {
+      const p = parseICSDateToken(key, val);
+      if (p) {
+        cur.start = p.date;
+        cur.allDay = p.allDay;
+      }
+      continue;
+    }
+    if (/^DTEND/i.test(key)) {
+      const p = parseICSDateToken(key, val);
+      if (p) cur.end = p.date;
+      continue;
+    }
+    if (/^SUMMARY/i.test(key)) { cur.summary = decodeICSText(val); continue; }
+    if (/^LOCATION/i.test(key)) { cur.location = decodeICSText(val); continue; }
+    if (/^DESCRIPTION/i.test(key)) { cur.description = decodeICSText(val); continue; }
+  }
+
+  return events;
+}
+
+// =======================================================
+// Selección de próximos partidos
+// =======================================================
+function getProximosPartidosFromICS(icsText) {
+  try {
+    const events = parseICS(icsText)
+      .filter(e => e.start instanceof Date && !isNaN(e.start))
+      .sort((a, b) => a.start - b.start);
+
+    const now = new Date();
+    const weekAhead = new Date(now.getTime() + 7 * 86400000);
+
+    const future = events.filter(e => e.start >= now);
+    const next7 = future.filter(e => e.start <= weekAhead);
+    const selected = next7.length ? next7 : future.slice(0, 2);
+
+    if (!selected.length) return `<p>No hay partidos próximos.</p>`;
+
+    return selected.map(e => {
+      const d1 = e.start;
+
+      const fecha1 = d1.toLocaleDateString("es-ES", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      });
+
+      let fechaFinal = "";
+      if (e.end && e.allDay && e.end > e.start) {
+        const d2 = new Date(e.end.getTime() - 86400000);
+        const fecha2 = d2.toLocaleDateString("es-ES", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        });
+        fechaFinal = ` - ${fecha2}`;
+      }
+
+      const hora = e.allDay
+        ? ""
+        : d1.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+
+      return `
+<div class="partido">
+  <div class="fecha">${fecha1}${fechaFinal}${hora ? " — " + hora : ""}</div>
+  <div class="vs">${escapeHtml(e.summary || "Partido")}</div>
+  ${e.location ? `<div class="lugar">${escapeHtml(e.location)}</div>` : ""}
+  ${e.description ? `<div class="desc">${escapeHtml(e.description)}</div>` : ""}
+</div>`;
+    }).join("\n");
+
+  } catch (err) {
+    return `<p>Error leyendo calendario.</p>`;
+  }
+}
+
+// =======================================================
 // MAIN
 // =======================================================
 
