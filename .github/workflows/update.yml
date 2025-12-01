@@ -1,1 +1,152 @@
+name: Update calendars daily
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # --- NUEVO: Garantizar repo completamente limpio ---
+      - name: Reset repo to clean state
+        run: |
+          git fetch origin
+          git reset --hard origin/main
+          git clean -fd
+          echo "Repositorio limpio y sincronizado con origin/main"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Clean environment completely
+        run: |
+          rm -rf node_modules package-lock.json
+          npm cache clean --force
+          echo "Entorno de Node limpio"
+
+      - name: Setup Google Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Setup Chromedriver
+        uses: nanasess/setup-chromedriver@v2
+
+      - name: Install deps
+        run: npm install selenium-webdriver
+
+      - name: Prepare debug folder
+        run: mkdir -p calendarios/debug
+
+      - name: Print Chrome and Chromedriver versions
+        run: |
+          /usr/bin/google-chrome --version || true
+          /usr/local/bin/chromedriver --version || true
+
+      # Opciones de diagnóstico (no toco nada)
+      - name: Debug connectivity to favoley
+        run: |
+          set -eux
+          mkdir -p calendarios/debug
+          echo "=== curl HTTP/2 verbose (full) ===" > calendarios/debug/favoley_debug_readme.txt
+
+          curl --max-time 20 -v "https://favoley.es/es/tournaments?season=8565&category=&sex=2&sport=&tournament_status=&delegation=1630" -o calendarios/debug/favoley_full.html 2>calendarios/debug/favoley_curl_verbose.txt || true
+          curl --http1.1 --max-time 20 -v "https://favoley.es/es/tournaments?season=8565&category=&sex=2&sport=&tournament_status=&delegation=1630" -o calendarios/debug/favoley_http1.html 2>calendarios/debug/favoley_http1_verbose.txt || true
+          curl -I --max-time 10 "https://favoley.es/es/tournaments?season=8565&category=&sex=2&sport=&tournament_status=&delegation=1630" -v > calendarios/debug/favoley_head.txt 2>&1 || true
+
+          if command -v openssl >/dev/null 2>&1; then
+            printf "\n\n=== openssl s_client -alpn h2 ===\n" > calendarios/debug/openssl_alpn.txt
+            echo | openssl s_client -connect favoley.es:443 -servername favoley.es -alpn h2 -brief >> calendarios/debug/openssl_alpn.txt 2>&1 || true
+
+            printf "\n\n=== openssl s_client (sin alpn) ===\n" >> calendarios/debug/openssl_alpn.txt
+            echo | openssl_s_client -connect favoley.es:443 -servername favoley.es >> calendarios/debug/openssl_alpn.txt 2>&1 || true
+          fi
+
+          if command -v nslookup >/dev/null 2>&1; then
+            nslookup favoley.es > calendarios/debug/nslookup.txt 2>&1 || true
+          else
+            dig favoley.es +short > calendarios/debug/dig.txt 2>&1 || true
+          fi
+
+          ls -la calendarios/debug > calendarios/debug/list_debug.txt 2>&1 || true
+        shell: bash
+
+      - name: Upload favoley debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: favoley-debug
+          path: calendarios/debug/
+
+      - name: Test proxy connectivity (favoley via proxy)
+        run: |
+          set -eux
+          mkdir -p calendarios/debug
+          echo "Testing proxy connectivity to favoley" > calendarios/debug/proxy_test_readme.txt
+
+          PROXY="http://51.178.73.63:8080"
+          echo "Using proxy: $PROXY" >> calendarios/debug/proxy_test_readme.txt
+
+          curl --max-time 15 -v --proxy "$PROXY" "https://favoley.es/es/tournaments?season=8565&category=&sex=2&sport=&tournament_status=&delegation=1630" -o calendarios/debug/proxy_favoley.html 2>calendarios/debug/proxy_curl_verbose.txt || true
+          curl --max-time 8 -v --proxy "$PROXY" "http://example.com" -o /dev/null 2>>calendarios/debug/proxy_curl_verbose.txt || true
+
+          ls -la calendarios/debug > calendarios/debug/proxy_list_debug.txt
+        shell: bash
+
+      - name: Upload proxy test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy-test
+          path: calendarios/debug/
+
+      - name: Run update (Federado + IMD calendarios + IMD clasificaciones)
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+          CHROMEDRIVER_PATH: /usr/local/bin/chromedriver
+          DEBUG_IMD: "1"
+        run: |
+          node scripts/update_calendars_federado_multi.js
+          node scripts/update_calendars_imd_multi.js
+          node scripts/update_clasificaciones_imd.js
+          node scripts/generate_index_html.js
+
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-imd
+          path: calendarios/debug/
+
+      # --- NUEVO: Commit/PUSH robusto y sin rebase ---
+      - name: Commit and push calendar updates
+        run: |
+          git config user.email "github-actions@github.com"
+          git config user.name "github-actions[bot]"
+
+          echo "=== Antes de git add ==="
+          ls -la calendarios || true
+          ls -la equipos || true
+          ls -la index.html || true
+
+          git add calendarios/*.ics calendarios/imd_clasificaciones.json index.html equipos/*.html || true
+
+          git commit -m "Automated update of calendars (IMD multi + FEDERADO + HTML) [ci skip]" || {
+            echo "No changes to commit"
+            exit 0
+          }
+
+          # Push directo, sin rebase, sin riesgo
+          git push origin main
 
