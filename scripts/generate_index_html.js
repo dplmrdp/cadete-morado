@@ -428,6 +428,46 @@ async function generateHTML(calendars, federadoMap) {
   }
 
   if (!fs.existsSync(EQUIPOS_DIR)) fs.mkdirSync(EQUIPOS_DIR, { recursive: true });
+// --- Añadir: generar páginas /equipos/ para cada calendario (actualiza próximos partidos leyendo .ics)
+async function safeGetFederadoInfo(slug, federadoMap) {
+  if (!federadoMap) return null;
+  // intentos de lookup razonables:
+  if (federadoMap[slug]) return federadoMap[slug];
+  const noPrefix = slug.replace(/^federado[_\-]/i, "");
+  if (federadoMap[noPrefix]) return federadoMap[noPrefix];
+  const up = slug.toUpperCase();
+  if (federadoMap[up]) return federadoMap[up];
+  const upNoPref = noPrefix.toUpperCase();
+  if (federadoMap[upNoPref]) return federadoMap[upNoPref];
+  return null;
+}
+
+console.log("↪ Generando/actualizando páginas individuales de equipo (equipos/*.html)...");
+for (const category of Object.keys(calendars)) {
+  for (const comp of ["FEDERADO", "IMD"]) {
+    const teams = calendars[category][comp] || [];
+    for (const t of teams) {
+      const icon = getIconForTeam(t.team);
+      const federadoInfo = comp === "FEDERADO" ? safeGetFederadoInfo(t.slug, federadoMap) : null;
+      try {
+        await generateTeamPage({
+          team: t.team,
+          category,
+          competition: comp,
+          urlPath: t.urlPath,
+          slug: t.slug,
+          iconPath: icon,
+          federadoInfo: federadoInfo,
+          federadoCache,
+          imdClasifMap
+        });
+        console.log(`   ✔ equipo página generada: ${t.slug}.html`);
+      } catch (err) {
+        console.warn(`   ⚠ error generando página para ${t.slug}: ${err && err.message ? err.message : err}`);
+      }
+    }
+  }
+}
 
 let html = `<!DOCTYPE html>
 <html lang="es">
