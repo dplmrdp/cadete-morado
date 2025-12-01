@@ -428,8 +428,9 @@ async function generateHTML(calendars, federadoMap) {
   }
 
   if (!fs.existsSync(EQUIPOS_DIR)) fs.mkdirSync(EQUIPOS_DIR, { recursive: true });
-// --- Añadir: generar páginas /equipos/ para cada calendario (actualiza próximos partidos leyendo .ics)
-async function safeGetFederadoInfo(slug, federadoMap) {
+
+  // --- Añadir: generar páginas /equipos/ para cada calendario (actualiza próximos partidos leyendo .ics)
+function safeGetFederadoInfo(slug, federadoMap) {
   if (!federadoMap) return null;
   // intentos de lookup razonables:
   if (federadoMap[slug]) return federadoMap[slug];
