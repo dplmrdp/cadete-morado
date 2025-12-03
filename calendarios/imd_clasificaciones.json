@@ -519,6 +519,15 @@
   ],
   "imd_infantil_femenino_cd_las_flores_sevilla_purpura": [
     {
+      "team": "CD ADRIANO B",
+      "pts": 8,
+      "pj": 4,
+      "pg": 4,
+      "pp": 0,
+      "sg": 12,
+      "sp": 0
+    },
+    {
       "team": "CD LAS FLORES SEVILLA PURPURA",
       "pts": 7,
       "pj": 4,
@@ -537,22 +546,13 @@
       "sp": 2
     },
     {
-      "team": "CD ADRIANO B",
+      "team": "C.D. SANEL BLANCO",
       "pts": 6,
       "pj": 4,
-      "pg": 3,
-      "pp": 0,
-      "sg": 9,
-      "sp": 0
-    },
-    {
-      "team": "C.D. SANEL BLANCO",
-      "pts": 5,
-      "pj": 4,
       "pg": 2,
-      "pp": 1,
+      "pp": 2,
       "sg": 5,
-      "sp": 4
+      "sp": 7
     },
     {
       "team": "CD ARBOLEDA NARANJA",
