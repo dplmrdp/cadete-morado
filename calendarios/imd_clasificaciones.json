@@ -741,6 +741,33 @@
   ],
   "imd_cadete_femenino_evb_las_flores_purpura": [
     {
+      "team": "PALESTRA C.V.  B",
+      "pts": 6,
+      "pj": 4,
+      "pg": 2,
+      "pp": 2,
+      "sg": 8,
+      "sp": 4
+    },
+    {
+      "team": "A.D.C. EPOPEYA",
+      "pts": 6,
+      "pj": 4,
+      "pg": 3,
+      "pp": 0,
+      "sg": 8,
+      "sp": 1
+    },
+    {
+      "team": "SALESIANOS TRIANA A",
+      "pts": 6,
+      "pj": 4,
+      "pg": 2,
+      "pp": 2,
+      "sg": 6,
+      "sp": 6
+    },
+    {
       "team": "CD ADRIANO B",
       "pts": 6,
       "pj": 4,
@@ -748,15 +775,6 @@
       "pp": 0,
       "sg": 7,
       "sp": 2
-    },
-    {
-      "team": "SALESIANOS TRIANA A",
-      "pts": 5,
-      "pj": 3,
-      "pg": 2,
-      "pp": 1,
-      "sg": 6,
-      "sp": 3
     },
     {
       "team": "COLEGIO SANTA ANA A",
@@ -786,31 +804,13 @@
       "sp": 2
     },
     {
-      "team": "PALESTRA C.V.  B",
-      "pts": 4,
-      "pj": 3,
-      "pg": 1,
-      "pp": 2,
-      "sg": 5,
-      "sp": 4
-    },
-    {
-      "team": "A.D.C. EPOPEYA",
-      "pts": 4,
-      "pj": 3,
-      "pg": 2,
-      "pp": 0,
-      "sg": 5,
-      "sp": 1
-    },
-    {
       "team": "LA FÁBRICA VARA DE REY",
-      "pts": 3,
-      "pj": 3,
+      "pts": 4,
+      "pj": 4,
       "pg": 0,
-      "pp": 3,
+      "pp": 4,
       "sg": 0,
-      "sp": 9
+      "sp": 12
     }
   ],
   "imd_infantil_femenino_evb_las_flores_purpura": [
