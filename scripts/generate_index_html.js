@@ -320,69 +320,80 @@ async function generateTeamPage({ team, category, competition, urlPath, slug, ic
   // ===========================================
   // CLASIFICACIÓN FEDERADO o IMD
   // ===========================================
-  let clasificacionHtml = "<p>Cargando…</p>";
+  // ===========================================
+// CLASIFICACIÓN FEDERADO o IMD
+// ===========================================
+let clasificacionHtml = "<p>Clasificación no disponible.</p>";
 
-  if (competition === "FEDERADO" && federadoInfo && federadoInfo.group !== 0) {
-    const cacheKey = slug;
-    const ranking = await fetchFederadoRanking(federadoInfo.tournament, federadoInfo.group);
-if (ranking && ranking.length) {
-  clasificacionHtml = buildClasificacionHTML(ranking, team);
+if (competition === "FEDERADO" && federadoInfo && federadoInfo.group !== 0) {
+  const cacheKey = slug;
 
-  const existing = fs.existsSync(FEDERADO_CACHE_PATH)
-    ? JSON.parse(fs.readFileSync(FEDERADO_CACHE_PATH, "utf8"))
-    : {};
-
-  existing[cacheKey] = {
-    updatedAt: new Date().toISOString(),
-    rows: ranking
-  };
-
-  fs.writeFileSync(
-    FEDERADO_CACHE_PATH,
-    JSON.stringify(existing, null, 2),
-    "utf8"
-  );
-}
- else {
-        throw new Error("Ranking vacío");
-      }
-    } catch (err) {
-      try {
-        const existing = fs.existsSync(FEDERADO_CACHE_PATH)
-          ? JSON.parse(fs.readFileSync(FEDERADO_CACHE_PATH, "utf8"))
-          : {};
-        if (existing[cacheKey] && existing[cacheKey].rows) {
-  clasificacionHtml =
-    buildClasificacionHTML(existing[cacheKey].rows, team) +
-    `<div class="clasificacion-note">
-      Clasificación actualizada por última vez el
-      ${new Date(existing[cacheKey].updatedAt).toLocaleDateString("es-ES", {
-        day: "numeric",
-        month: "long",
-        year: "numeric"
-      })}
-    </div>`;
-}
-
-        } else {
-          clasificacionHtml = "<p>Clasificación no disponible.</p>";
-        }
-      } catch {
-        clasificacionHtml = "<p>Clasificación no disponible.</p>";
-      }
-    }
-
-  } else if (competition === "IMD") {
-    const rows = imdClasifMap && imdClasifMap[slug];
-    if (rows && rows.length) {
-      clasificacionHtml = buildClasificacionIMD(rows, team);
-    } else {
-      clasificacionHtml = "<p>No disponible para esta categoría.</p>";
-    }
-
-  } else {
-    clasificacionHtml = "<p>No disponible.</p>";
+  let cache = {};
+  if (fs.existsSync(FEDERADO_CACHE_PATH)) {
+    try {
+      cache = JSON.parse(fs.readFileSync(FEDERADO_CACHE_PATH, "utf8"));
+    } catch {}
   }
+
+  try {
+    const ranking = await fetchFederadoRanking(
+      federadoInfo.tournament,
+      federadoInfo.group
+    );
+
+    if (ranking && ranking.length) {
+      // 👉 Caso ideal: datos nuevos
+      clasificacionHtml = buildClasificacionHTML(ranking, team);
+
+      cache[cacheKey] = {
+        updatedAt: new Date().toISOString(),
+        rows: ranking
+      };
+
+      fs.writeFileSync(
+        FEDERADO_CACHE_PATH,
+        JSON.stringify(cache, null, 2),
+        "utf8"
+      );
+    } else if (cache[cacheKey]?.rows) {
+      // 👉 No hay datos nuevos, usar cache
+      clasificacionHtml =
+        buildClasificacionHTML(cache[cacheKey].rows, team) +
+        `<div class="clasificacion-note">
+          Clasificación actualizada por última vez el
+          ${new Date(cache[cacheKey].updatedAt).toLocaleDateString("es-ES", {
+            day: "numeric",
+            month: "long",
+            year: "numeric"
+          })}
+        </div>`;
+    }
+
+  } catch (err) {
+    // 👉 Error de red → usar cache si existe
+    if (cache[cacheKey]?.rows) {
+      clasificacionHtml =
+        buildClasificacionHTML(cache[cacheKey].rows, team) +
+        `<div class="clasificacion-note">
+          Clasificación actualizada por última vez el
+          ${new Date(cache[cacheKey].updatedAt).toLocaleDateString("es-ES", {
+            day: "numeric",
+            month: "long",
+            year: "numeric"
+          })}
+        </div>`;
+    }
+  }
+
+} else if (competition === "IMD") {
+  const rows = imdClasifMap && imdClasifMap[slug];
+  if (rows && rows.length) {
+    clasificacionHtml = buildClasificacionIMD(rows, team);
+  } else {
+    clasificacionHtml = "<p>No disponible para esta categoría.</p>";
+  }
+}
+
 
   // =======================================================
   // PROXIMOS PARTIDOS (ICS)
