@@ -138,98 +138,7 @@
       "sp": 15
     }
   ],
-  "imd_senior_femenino_cd_las_flores_sevilla": [
-    {
-      "team": "CV YUSIHAYAS",
-      "pts": 10,
-      "pj": 5,
-      "pg": 5,
-      "pp": 0,
-      "sg": 15,
-      "sp": 4
-    },
-    {
-      "team": "CD LAS FLORES SEVILLA",
-      "pts": 8,
-      "pj": 5,
-      "pg": 3,
-      "pp": 2,
-      "sg": 11,
-      "sp": 9
-    },
-    {
-      "team": "CD COLEGIO CLARET",
-      "pts": 8,
-      "pj": 5,
-      "pg": 4,
-      "pp": 0,
-      "sg": 12,
-      "sp": 4
-    },
-    {
-      "team": "C.V.ROCHELAMBERT",
-      "pts": 8,
-      "pj": 5,
-      "pg": 3,
-      "pp": 2,
-      "sg": 11,
-      "sp": 10
-    },
-    {
-      "team": "CV ALCORES ARBOLEDA",
-      "pts": 7,
-      "pj": 5,
-      "pg": 2,
-      "pp": 3,
-      "sg": 8,
-      "sp": 12
-    },
-    {
-      "team": "JVSEVILLA-SAMU",
-      "pts": 7,
-      "pj": 5,
-      "pg": 2,
-      "pp": 3,
-      "sg": 11,
-      "sp": 13
-    },
-    {
-      "team": "BAÑOS MEDINA ALJARAFE CD QUIMERA",
-      "pts": 7,
-      "pj": 5,
-      "pg": 2,
-      "pp": 3,
-      "sg": 10,
-      "sp": 10
-    },
-    {
-      "team": "FLORIN VB-SVS",
-      "pts": 6,
-      "pj": 5,
-      "pg": 2,
-      "pp": 2,
-      "sg": 7,
-      "sp": 6
-    },
-    {
-      "team": "PALESTRA C.V.",
-      "pts": 6,
-      "pj": 5,
-      "pg": 1,
-      "pp": 4,
-      "sg": 9,
-      "sp": 12
-    },
-    {
-      "team": "CD ADRIANO",
-      "pts": 5,
-      "pj": 5,
-      "pg": 0,
-      "pp": 5,
-      "sg": 1,
-      "sp": 15
-    }
-  ],
+  "imd_senior_femenino_cd_las_flores_sevilla": [],
   "imd_cadete_femenino_cd_las_flores_sevilla_morado": [
     {
       "team": "CD LAS FLORES SEVILLA MORADO",
@@ -669,7 +578,7 @@
     {
       "team": "BAÑOS MEDINA ALJARAFE CD QUIMERA",
       "pts": 10,
-      "pj": 5,
+      "pj": 6,
       "pg": 5,
       "pp": 0,
       "sg": 13,
@@ -678,7 +587,7 @@
     {
       "team": "CD ADRIANO C",
       "pts": 8,
-      "pj": 5,
+      "pj": 6,
       "pg": 3,
       "pp": 2,
       "sg": 9,
@@ -687,7 +596,7 @@
     {
       "team": "C.D. SANEL CELESTE",
       "pts": 7,
-      "pj": 5,
+      "pj": 6,
       "pg": 3,
       "pp": 1,
       "sg": 9,
@@ -696,7 +605,7 @@
     {
       "team": "VOLEIBOL SERVET BLANCO",
       "pts": 6,
-      "pj": 5,
+      "pj": 6,
       "pg": 2,
       "pp": 2,
       "sg": 8,
@@ -705,7 +614,7 @@
     {
       "team": "COLEGIO SAGRADO CORAZON DE JESUS B",
       "pts": 6,
-      "pj": 5,
+      "pj": 6,
       "pg": 1,
       "pp": 4,
       "sg": 2,
@@ -714,7 +623,7 @@
     {
       "team": "EVB LAS FLORES ALBERO",
       "pts": 5,
-      "pj": 4,
+      "pj": 5,
       "pg": 1,
       "pp": 3,
       "sg": 3,
@@ -723,7 +632,7 @@
     {
       "team": "CD SALESIANOS TRINIDAD ROJO",
       "pts": 5,
-      "pj": 5,
+      "pj": 6,
       "pg": 1,
       "pp": 3,
       "sg": 5,
@@ -732,7 +641,7 @@
     {
       "team": "SALESIANOS TRIANA A",
       "pts": 4,
-      "pj": 4,
+      "pj": 5,
       "pg": 1,
       "pp": 2,
       "sg": 2,
@@ -817,7 +726,7 @@
     {
       "team": "VOLEIBOL MIGUEL SERVET",
       "pts": 10,
-      "pj": 5,
+      "pj": 6,
       "pg": 5,
       "pp": 0,
       "sg": 14,
@@ -826,7 +735,7 @@
     {
       "team": "CD ADRIANO",
       "pts": 8,
-      "pj": 5,
+      "pj": 6,
       "pg": 4,
       "pp": 0,
       "sg": 12,
@@ -835,7 +744,7 @@
     {
       "team": "BUEN PASTOR",
       "pts": 8,
-      "pj": 5,
+      "pj": 6,
       "pg": 3,
       "pp": 2,
       "sg": 9,
@@ -844,7 +753,7 @@
     {
       "team": "GOLDEN TEAM",
       "pts": 7,
-      "pj": 5,
+      "pj": 6,
       "pg": 3,
       "pp": 1,
       "sg": 8,
@@ -853,7 +762,7 @@
     {
       "team": "COLEGIO SAGRADO CORAZON DE JESUS",
       "pts": 7,
-      "pj": 5,
+      "pj": 6,
       "pg": 2,
       "pp": 3,
       "sg": 6,
@@ -862,7 +771,7 @@
     {
       "team": "EVB LAS FLORES PURPURA",
       "pts": 6,
-      "pj": 5,
+      "pj": 6,
       "pg": 1,
       "pp": 4,
       "sg": 2,
@@ -871,7 +780,7 @@
     {
       "team": "PALESTRA  C.V.   R",
       "pts": 6,
-      "pj": 5,
+      "pj": 6,
       "pg": 1,
       "pp": 4,
       "sg": 6,
@@ -880,7 +789,7 @@
     {
       "team": "CD SALESIANOS TRINIDAD AMARILLO",
       "pts": 5,
-      "pj": 5,
+      "pj": 6,
       "pg": 0,
       "pp": 5,
       "sg": 0,
