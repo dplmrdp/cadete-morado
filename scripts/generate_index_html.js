@@ -324,17 +324,26 @@ async function generateTeamPage({ team, category, competition, urlPath, slug, ic
 
   if (competition === "FEDERADO" && federadoInfo && federadoInfo.group !== 0) {
     const cacheKey = slug;
-    try {
-      const ranking = await fetchFederadoRanking(federadoInfo.tournament, federadoInfo.group);
-      if (ranking && ranking.length) {
-        clasificacionHtml = buildClasificacionHTML(ranking, team);
+    const ranking = await fetchFederadoRanking(federadoInfo.tournament, federadoInfo.group);
+if (ranking && ranking.length) {
+  clasificacionHtml = buildClasificacionHTML(ranking, team);
 
-        const existing = fs.existsSync(FEDERADO_CACHE_PATH)
-          ? JSON.parse(fs.readFileSync(FEDERADO_CACHE_PATH, "utf8"))
-          : {};
-        existing[cacheKey] = ranking;
-        fs.writeFileSync(FEDERADO_CACHE_PATH, JSON.stringify(existing, null, 2), "utf8");
-      } else {
+  const existing = fs.existsSync(FEDERADO_CACHE_PATH)
+    ? JSON.parse(fs.readFileSync(FEDERADO_CACHE_PATH, "utf8"))
+    : {};
+
+  existing[cacheKey] = {
+    updatedAt: new Date().toISOString(),
+    rows: ranking
+  };
+
+  fs.writeFileSync(
+    FEDERADO_CACHE_PATH,
+    JSON.stringify(existing, null, 2),
+    "utf8"
+  );
+}
+ else {
         throw new Error("Ranking vacío");
       }
     } catch (err) {
@@ -342,8 +351,19 @@ async function generateTeamPage({ team, category, competition, urlPath, slug, ic
         const existing = fs.existsSync(FEDERADO_CACHE_PATH)
           ? JSON.parse(fs.readFileSync(FEDERADO_CACHE_PATH, "utf8"))
           : {};
-        if (existing[cacheKey]) {
-          clasificacionHtml = buildClasificacionHTML(existing[cacheKey], team);
+        if (existing[cacheKey] && existing[cacheKey].rows) {
+  clasificacionHtml =
+    buildClasificacionHTML(existing[cacheKey].rows, team) +
+    `<div class="clasificacion-note">
+      Clasificación actualizada por última vez el
+      ${new Date(existing[cacheKey].updatedAt).toLocaleDateString("es-ES", {
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      })}
+    </div>`;
+}
+
         } else {
           clasificacionHtml = "<p>Clasificación no disponible.</p>";
         }
