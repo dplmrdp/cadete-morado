@@ -468,8 +468,8 @@
       "pj": 5,
       "pg": 4,
       "pp": 0,
-      "sg": 9,
-      "sp": 3
+      "sg": 10,
+      "sp": 2
     },
     {
       "team": "CD LAS FLORES SEVILLA MORADO",
@@ -477,8 +477,8 @@
       "pj": 5,
       "pg": 2,
       "pp": 3,
-      "sg": 8,
-      "sp": 7
+      "sg": 7,
+      "sp": 8
     },
     {
       "team": "CD SALESIANOS TRINIDAD ROJO",
@@ -714,7 +714,7 @@
     {
       "team": "SALESIANOS TRIANA A",
       "pts": 6,
-      "pj": 5,
+      "pj": 6,
       "pg": 2,
       "pp": 2,
       "sg": 5,
@@ -723,7 +723,7 @@
     {
       "team": "EVB LAS FLORES ALBERO",
       "pts": 6,
-      "pj": 5,
+      "pj": 6,
       "pg": 1,
       "pp": 4,
       "sg": 3,
